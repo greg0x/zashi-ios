@@ -75,10 +75,14 @@ extension PIRClient: DependencyKey {
         
         return PIRClient(
             connect: { serverURL in
+                print("🔌 PIRClient: Connecting to \(serverURL)")
                 try await state.connect(serverURL: serverURL)
+                print("✅ PIRClient: Connected successfully")
             },
             precomputeKeys: {
+                print("🔑 PIRClient: Precomputing keys...")
                 try await state.precomputeKeys()
+                print("✅ PIRClient: Keys ready")
             },
             keysReady: {
                 // This is synchronous in the interface but we need to bridge
@@ -86,7 +90,10 @@ extension PIRClient: DependencyKey {
                 false
             },
             checkNullifier: { nullifier in
-                try await state.checkNullifier(nullifier)
+                print("🔍 PIRClient: Checking nullifier \(nullifier.prefix(4).hexEncodedString())...")
+                let result = try await state.checkNullifier(nullifier)
+                print("📋 PIRClient: Result = \(result != nil ? "SPENT" : "not spent")")
+                return result
             },
             checkNullifiers: { nullifiers in
                 try await state.checkNullifiers(nullifiers)
@@ -111,5 +118,13 @@ extension DependencyValues {
     public var pirClient: PIRClient {
         get { self[PIRClient.self] }
         set { self[PIRClient.self] = newValue }
+    }
+}
+
+// MARK: - Debug Helpers
+
+private extension Data {
+    func hexEncodedString() -> String {
+        map { String(format: "%02x", $0) }.joined()
     }
 }

@@ -51,19 +51,7 @@ public struct PIRVerificationView: View {
             .screenTitle("Private Balance Check")
             .onAppear { store.send(.onAppear) }
             .onDisappear { store.send(.onDisappear) }
-            .alert(
-                "Cancel Verification?",
-                isPresented: $store.showCancelConfirmation
-            ) {
-                Button("Continue", role: .cancel) {
-                    store.send(.cancelConfirmationDismissed)
-                }
-                Button("Cancel", role: .destructive) {
-                    store.send(.cancelVerification)
-                }
-            } message: {
-                Text("The verification is in progress. Are you sure you want to cancel?")
-            }
+            .alert($store.scope(state: \.alert, action: \.alert))
         }
     }
     
@@ -73,11 +61,17 @@ public struct PIRVerificationView: View {
             Text("PIR Server URL")
                 .zFont(.medium, size: 14, style: Design.Text.tertiary)
             
-            TextField("Server URL", text: $store.serverURL)
-                .textFieldStyle(.roundedBorder)
-                .autocapitalization(.none)
-                .disableAutocorrection(true)
-                .zFont(size: 14, style: Design.Text.primary)
+            TextField(
+                "Server URL",
+                text: Binding(
+                    get: { store.serverURL },
+                    set: { store.send(.updateServerURL($0)) }
+                )
+            )
+            .textFieldStyle(.roundedBorder)
+            .autocapitalization(.none)
+            .disableAutocorrection(true)
+            .zFont(size: 14, style: Design.Text.primary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

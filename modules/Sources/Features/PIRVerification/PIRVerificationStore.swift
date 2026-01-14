@@ -24,7 +24,7 @@ public struct PIRVerification {
         }
         
         public var verificationState: VerificationState = .idle
-        public var showCancelConfirmation = false
+        @Presents public var alert: AlertState<Action.Alert>?
         public var serverURL: String = "http://localhost:8080"
         
         public var isOperationInProgress: Bool {
@@ -61,16 +61,22 @@ public struct PIRVerification {
     }
     
     public enum Action: Equatable {
-        case cancelConfirmationDismissed
+        case alert(PresentationAction<Alert>)
         case cancelRequested
         case cancelVerification
         case onAppear
         case onDisappear
         case startVerification
+        case updateServerURL(String)
         case verificationCompleted(checkedCount: Int, newlySpentCount: Int)
         case verificationFailed(String)
         case verificationProgress(Int, Int)
         case verificationStateChanged(State.VerificationState)
+        
+        @CasePathable
+        public enum Alert: Equatable {
+            case cancel
+        }
     }
     
     private enum CancelID { case verification }
@@ -132,18 +138,36 @@ public struct PIRVerification {
                 .cancellable(id: CancelID.verification)
                 
             case .cancelRequested:
-                state.showCancelConfirmation = true
+                state.alert = AlertState {
+                    TextState("Cancel Verification?")
+                } actions: {
+                    ButtonState(role: .destructive, action: .cancel) {
+                        TextState("Cancel")
+                    }
+                    ButtonState(role: .cancel) {
+                        TextState("Continue")
+                    }
+                } message: {
+                    TextState("The verification is in progress. Are you sure you want to cancel?")
+                }
                 return .none
                 
-            case .cancelConfirmationDismissed:
-                state.showCancelConfirmation = false
-                return .none
-                
-            case .cancelVerification:
-                state.showCancelConfirmation = false
+            case .alert(.presented(.cancel)):
                 state.verificationState = .idle
                 pirClient.disconnect()
                 return .cancel(id: CancelID.verification)
+                
+            case .alert(.dismiss):
+                return .none
+                
+            case .cancelVerification:
+                state.verificationState = .idle
+                pirClient.disconnect()
+                return .cancel(id: CancelID.verification)
+                
+            case .updateServerURL(let url):
+                state.serverURL = url
+                return .none
                 
             case .verificationStateChanged(let newState):
                 state.verificationState = newState
@@ -162,6 +186,7 @@ public struct PIRVerification {
                 return .none
             }
         }
+        .ifLet(\.$alert, action: \.alert)
     }
 }
 
