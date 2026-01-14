@@ -22,13 +22,22 @@ public struct PIRVerificationView: View {
     public var body: some View {
         WithPerceptionTracking {
             VStack(spacing: 0) {
-                Spacer()
-                
-                illustration()
-                    .padding(.bottom, 32)
-                
-                statusContent()
-                    .padding(.bottom, 40)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        illustration()
+                            .padding(.top, 40)
+                            .padding(.bottom, 32)
+                        
+                        statusContent()
+                            .padding(.bottom, 24)
+                        
+                        // Server URL configuration (for testing)
+                        if case .idle = store.verificationState {
+                            serverUrlField()
+                                .padding(.bottom, 24)
+                        }
+                    }
+                }
                 
                 Spacer()
                 
@@ -55,6 +64,26 @@ public struct PIRVerificationView: View {
             } message: {
                 Text("The verification is in progress. Are you sure you want to cancel?")
             }
+        }
+    }
+    
+    @ViewBuilder
+    private func serverUrlField() -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("PIR Server URL")
+                .zFont(.medium, size: 14, style: Design.Text.tertiary)
+            
+            TextField("Server URL", text: $store.serverURL)
+                .textFieldStyle(.roundedBorder)
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+                .zFont(size: 14, style: Design.Text.primary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background {
+            RoundedRectangle(cornerRadius: Design.Radius._lg)
+                .fill(Design.Surfaces.bgSecondary.color(colorScheme))
         }
     }
     

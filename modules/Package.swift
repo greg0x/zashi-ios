@@ -49,6 +49,7 @@ let package = Package(
         .library(name: "OnboardingFlow", targets: ["OnboardingFlow"]),
         .library(name: "OSStatusError", targets: ["OSStatusError"]),
         .library(name: "PartnerKeys", targets: ["PartnerKeys"]),
+        .library(name: "PIRClient", targets: ["PIRClient"]),
         .library(name: "PIRVerification", targets: ["PIRVerification"]),
         .library(name: "Pasteboard", targets: ["Pasteboard"]),
         .library(name: "PrivateDataConsent", targets: ["PrivateDataConsent"]),
@@ -101,7 +102,8 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-case-paths", from: "1.5.6"),
         .package(url: "https://github.com/pointfreeco/swift-url-routing", from: "0.6.2"),
         .package(url: "https://github.com/zcash-hackworks/MnemonicSwift", from: "2.2.5"),
-        .package(url: "https://github.com/Electric-Coin-Company/zcash-swift-wallet-sdk", from: "2.4.2"),
+        // Using local SDK with PIR support for development
+        .package(path: "../../zcash-swift-wallet-sdk"),
         .package(url: "https://github.com/flexa/flexa-ios.git", exact: "1.0.9"),
         .package(url: "https://github.com/pacu/zcash-swift-payment-uri", from: "1.0.0"),
         .package(url: "https://github.com/airbnb/lottie-spm.git", from: "4.5.1"),
@@ -541,9 +543,18 @@ let package = Package(
             path: "Sources/Dependencies/PartnerKeys"
         ),
         .target(
+            name: "PIRClient",
+            dependencies: [
+                .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+                .product(name: "ZcashLightClientKit", package: "zcash-swift-wallet-sdk")
+            ],
+            path: "Sources/Dependencies/PIRClient"
+        ),
+        .target(
             name: "PIRVerification",
             dependencies: [
                 "Generated",
+                "PIRClient",
                 "UIComponents",
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "ZcashLightClientKit", package: "zcash-swift-wallet-sdk")

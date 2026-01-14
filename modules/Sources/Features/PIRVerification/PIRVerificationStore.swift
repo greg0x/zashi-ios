@@ -8,6 +8,7 @@
 import Foundation
 import ComposableArchitecture
 import ZcashLightClientKit
+import PIRClient
 
 @Reducer
 public struct PIRVerification {
@@ -24,6 +25,7 @@ public struct PIRVerification {
         
         public var verificationState: VerificationState = .idle
         public var showCancelConfirmation = false
+        public var serverURL: String = "http://localhost:8080"
         
         public var isOperationInProgress: Bool {
             switch verificationState {
@@ -73,6 +75,8 @@ public struct PIRVerification {
     
     private enum CancelID { case verification }
     
+    @Dependency(\.pirClient) var pirClient
+    
     public init() {}
     
     public var body: some Reducer<State, Action> {
@@ -82,36 +86,46 @@ public struct PIRVerification {
                 return .none
                 
             case .onDisappear:
+                pirClient.disconnect()
                 return .cancel(id: CancelID.verification)
                 
             case .startVerification:
                 state.verificationState = .connecting
+                let serverURL = state.serverURL
                 
                 return .run { send in
-                    // TODO: Integrate with actual PIR client when available
-                    // For now, simulate the verification flow
-                    
-                    // Simulate connecting
-                    try await Task.sleep(nanoseconds: 1_000_000_000)
-                    await send(.verificationStateChanged(.preparingKeys))
-                    
-                    // Simulate key preparation
-                    try await Task.sleep(nanoseconds: 3_000_000_000)
-                    
-                    // Simulate verification of 5 notes
-                    let totalNotes = 5
-                    for i in 1...totalNotes {
-                        await send(.verificationProgress(i, totalNotes))
-                        try await Task.sleep(nanoseconds: 500_000_000)
-                    }
-                    
-                    // Simulate completion
-                    await send(.verificationCompleted(checkedCount: totalNotes, newlySpentCount: 0))
-                    
-                } catch: { error, send in
-                    if error is CancellationError {
-                        await send(.verificationStateChanged(.idle))
-                    } else {
+                    do {
+                        // Step 1: Connect to PIR server
+                        try await pirClient.connect(serverURL)
+                        
+                        // Step 2: Precompute keys
+                        await send(.verificationStateChanged(.preparingKeys))
+                        try await pirClient.precomputeKeys()
+                        
+                        // Step 3: Generate test nullifiers for demo
+                        // In production, these would come from the wallet's unspent notes
+                        let testNullifiers = generateTestNullifiers(count: 5)
+                        let totalNotes = testNullifiers.count
+                        
+                        var spentCount = 0
+                        
+                        // Step 4: Check each nullifier
+                        for (index, nullifier) in testNullifiers.enumerated() {
+                            await send(.verificationProgress(index + 1, totalNotes))
+                            
+                            if let spentInfo = try await pirClient.checkNullifier(nullifier) {
+                                spentCount += 1
+                                // In production: update wallet state here
+                                print("Note \(index + 1) spent at block \(spentInfo.blockHeight)")
+                            }
+                        }
+                        
+                        await send(.verificationCompleted(
+                            checkedCount: totalNotes,
+                            newlySpentCount: spentCount
+                        ))
+                        
+                    } catch {
                         await send(.verificationFailed(error.localizedDescription))
                     }
                 }
@@ -128,6 +142,7 @@ public struct PIRVerification {
             case .cancelVerification:
                 state.showCancelConfirmation = false
                 state.verificationState = .idle
+                pirClient.disconnect()
                 return .cancel(id: CancelID.verification)
                 
             case .verificationStateChanged(let newState):
@@ -147,5 +162,26 @@ public struct PIRVerification {
                 return .none
             }
         }
+    }
+}
+
+// MARK: - Test Data Generation
+
+/// Generate test nullifiers for demo purposes.
+/// In production, these would come from the wallet's unspent notes.
+private func generateTestNullifiers(count: Int) -> [Data] {
+    // Generate deterministic test nullifiers based on index
+    // These are NOT real nullifiers - just for demo/testing
+    (0..<count).map { index in
+        var bytes = [UInt8](repeating: 0, count: 32)
+        // Fill with a pattern based on index for reproducibility
+        bytes[0] = UInt8(index & 0xFF)
+        bytes[1] = UInt8((index >> 8) & 0xFF)
+        // Add some entropy
+        bytes[31] = UInt8(0xDE)
+        bytes[30] = UInt8(0xAD)
+        bytes[29] = UInt8(0xBE)
+        bytes[28] = UInt8(0xEF)
+        return Data(bytes)
     }
 }
