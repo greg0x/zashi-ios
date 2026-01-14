@@ -14,6 +14,7 @@ import AddressBook
 import CurrencyConversionSetup
 import DeleteWallet
 import ExportTransactionHistory
+import PIRVerification
 import PrivateDataConsent
 import RecoveryPhraseDisplay
 import Scan
@@ -93,6 +94,8 @@ extension Settings {
                     var torSetupState = TorSetup.State.initial
                     torSetupState.isSettingsView = true
                     state.path.append(.torSetup(torSetupState))
+                case .pirVerification:
+                    state.path.append(.pirVerification(PIRVerification.State.initial))
                 case .resetZashi:
                     state.path.append(.resetZashi(DeleteWallet.State.initial))
                 }

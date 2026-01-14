@@ -16,6 +16,7 @@ import AddressBook
 import CurrencyConversionSetup
 import DeleteWallet
 import ExportTransactionHistory
+import PIRVerification
 import PrivateDataConsent
 import RecoveryPhraseDisplay
 import Scan
@@ -38,6 +39,7 @@ public struct Settings {
         case currencyConversionSetup(CurrencyConversionSetup)
         case exportPrivateData(PrivateDataConsent)
         case exportTransactionHistory(ExportTransactionHistory)
+        case pirVerification(PIRVerification)
         case recoveryPhrase(RecoveryPhraseDisplay)
         case resetZashi(DeleteWallet)
         case scan(Scan)

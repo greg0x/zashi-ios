@@ -14,6 +14,7 @@ public struct AdvancedSettings {
             case chooseServer
             case exportPrivateData
             case exportTaxFile
+            case pirVerification
             case recoveryPhrase
             case resetZashi
             case torSetup
@@ -39,7 +40,7 @@ public struct AdvancedSettings {
             switch action {
             case .operationAccessCheck(let operation):
                 switch operation {
-                case .chooseServer, .torSetup:
+                case .chooseServer, .torSetup, .pirVerification:
                     return .send(.operationAccessGranted(operation))
                 case .recoveryPhrase, .exportPrivateData, .exportTaxFile, .resetZashi:
                     return .run { send in

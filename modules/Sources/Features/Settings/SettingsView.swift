@@ -10,6 +10,7 @@ import AddressBook
 import CurrencyConversionSetup
 import DeleteWallet
 import ExportTransactionHistory
+import PIRVerification
 import PrivateDataConsent
 import RecoveryPhraseDisplay
 import Scan
@@ -126,6 +127,8 @@ public struct SettingsView: View {
                     PrivateDataConsentView(store: store)
                 case let .exportTransactionHistory(store):
                     ExportTransactionHistoryView(store: store)
+                case let .pirVerification(store):
+                    PIRVerificationView(store: store)
                 case let .recoveryPhrase(store):
                     RecoveryPhraseDisplayView(store: store)
                 case let .resetZashi(store):

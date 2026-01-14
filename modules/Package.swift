@@ -49,6 +49,7 @@ let package = Package(
         .library(name: "OnboardingFlow", targets: ["OnboardingFlow"]),
         .library(name: "OSStatusError", targets: ["OSStatusError"]),
         .library(name: "PartnerKeys", targets: ["PartnerKeys"]),
+        .library(name: "PIRVerification", targets: ["PIRVerification"]),
         .library(name: "Pasteboard", targets: ["Pasteboard"]),
         .library(name: "PrivateDataConsent", targets: ["PrivateDataConsent"]),
         .library(name: "QRImageDetector", targets: ["QRImageDetector"]),
@@ -540,6 +541,16 @@ let package = Package(
             path: "Sources/Dependencies/PartnerKeys"
         ),
         .target(
+            name: "PIRVerification",
+            dependencies: [
+                "Generated",
+                "UIComponents",
+                .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+                .product(name: "ZcashLightClientKit", package: "zcash-swift-wallet-sdk")
+            ],
+            path: "Sources/Features/PIRVerification"
+        ),
+        .target(
             name: "Pasteboard",
             dependencies: [
                 "Utils",
@@ -839,6 +850,7 @@ let package = Package(
                 "Models",
                 "PartnerKeys",
                 "Pasteboard",
+                "PIRVerification",
                 "PrivateDataConsent",
                 "RecoveryPhraseDisplay",
                 "Scan",

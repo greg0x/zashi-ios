@@ -59,10 +59,17 @@ public struct AdvancedSettingsView: View {
 
                         ActionRow(
                             icon: Asset.Assets.Icons.shieldZap.image,
-                            title: L10n.Settings.private,
-                            divider: false
+                            title: L10n.Settings.private
                         ) {
                             store.send(.operationAccessCheck(.torSetup))
+                        }
+                        
+                        ActionRow(
+                            icon: Asset.Assets.shield.image,
+                            title: "Private Balance Check",
+                            divider: false
+                        ) {
+                            store.send(.operationAccessCheck(.pirVerification))
                         }
                     }
                     .listRowInsets(EdgeInsets())
