@@ -455,9 +455,22 @@ public struct PIRVerification {
                             try await pirClient.precomputeKeys()
                         }
                         
-                        // Check the nullifier
-                        let result = try await pirClient.checkNullifier(nullifier)
-                        await send(.testCompleted(testType, result))
+                        // Check the nullifier with timing
+                        let result = try await pirClient.checkNullifierWithTiming(nullifier)
+                        
+                        // Update metrics
+                        let metrics = QueryMetrics(
+                            queryGenerationMs: result.timing.queryGenerationMs,
+                            networkMs: result.timing.networkMs,
+                            serverProcessingMs: result.timing.serverProcessingMs,
+                            decryptionMs: result.timing.decryptionMs,
+                            totalMs: result.timing.totalMs,
+                            uploadedBytes: result.timing.uploadBytes,
+                            downloadedBytes: result.timing.downloadBytes,
+                            nullifiersChecked: 1
+                        )
+                        await send(.updateMetrics(metrics))
+                        await send(.testCompleted(testType, result.spentInfo))
                         
                     } catch {
                         await send(.testFailed(testType, error.localizedDescription))
@@ -517,11 +530,31 @@ public struct PIRVerification {
                         var spentCount = 0
                         var spentNotes: [SpentNoteInfo] = []
                         
-                        // Step 4: Check each nullifier
+                        // Accumulated timing
+                        var totalQueryGenMs = 0
+                        var totalNetworkMs = 0
+                        var totalServerMs = 0
+                        var totalDecryptMs = 0
+                        var totalUploadBytes = 0
+                        var totalDownloadBytes = 0
+                        
+                        let verificationStart = DispatchTime.now()
+                        
+                        // Step 4: Check each nullifier with timing
                         for (index, nullifier) in testNullifiers.enumerated() {
                             await send(.verificationProgress(index + 1, totalNotes))
                             
-                            if let spentInfo = try await pirClient.checkNullifier(nullifier) {
+                            let result = try await pirClient.checkNullifierWithTiming(nullifier)
+                            
+                            // Accumulate timing
+                            totalQueryGenMs += result.timing.queryGenerationMs
+                            totalNetworkMs += result.timing.networkMs
+                            totalServerMs += result.timing.serverProcessingMs
+                            totalDecryptMs += result.timing.decryptionMs
+                            totalUploadBytes += result.timing.uploadBytes
+                            totalDownloadBytes += result.timing.downloadBytes
+                            
+                            if let spentInfo = result.spentInfo {
                                 spentCount += 1
                                 spentNotes.append(SpentNoteInfo(
                                     blockHeight: UInt32(spentInfo.blockHeight),
@@ -529,6 +562,22 @@ public struct PIRVerification {
                                 ))
                             }
                         }
+                        
+                        let verificationEnd = DispatchTime.now()
+                        let totalMs = Int((verificationEnd.uptimeNanoseconds - verificationStart.uptimeNanoseconds) / 1_000_000)
+                        
+                        // Update metrics
+                        let metrics = QueryMetrics(
+                            queryGenerationMs: totalQueryGenMs,
+                            networkMs: totalNetworkMs,
+                            serverProcessingMs: totalServerMs,
+                            decryptionMs: totalDecryptMs,
+                            totalMs: totalMs,
+                            uploadedBytes: totalUploadBytes,
+                            downloadedBytes: totalDownloadBytes,
+                            nullifiersChecked: totalNotes
+                        )
+                        await send(.updateMetrics(metrics))
                         
                         await send(.verificationCompleted(
                             checkedCount: totalNotes,
