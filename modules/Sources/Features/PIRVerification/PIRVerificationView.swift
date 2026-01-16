@@ -21,30 +21,35 @@ public struct PIRVerificationView: View {
     
     public var body: some View {
         WithPerceptionTracking {
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        illustration()
-                            .padding(.top, 40)
-                            .padding(.bottom, 32)
-                        
-                        statusContent()
-                            .padding(.bottom, 24)
-                        
-                        // Server URL configuration (for testing)
-                        if case .idle = store.verificationState {
-                            serverUrlField()
-                                .padding(.bottom, 24)
-                        }
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Configuration Section
+                    configurationSection()
+                    
+                    // Test Mode Section
+                    testModeSection()
+                    
+                    // Verification Section
+                    verificationSection()
+                    
+                    // Metrics Section (if available)
+                    if let metrics = store.lastQueryMetrics {
+                        metricsSection(metrics)
+                    }
+                    
+                    // Spent Notes Found (if any)
+                    if !store.spentNotesFound.isEmpty {
+                        spentNotesSection()
+                    }
+                    
+                    // Technical Details (expandable)
+                    if store.showTechnicalDetails {
+                        technicalDetailsSection()
                     }
                 }
-                
-                Spacer()
-                
-                actionButtons()
-                    .padding(.bottom, 24)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 24)
             }
-            .screenHorizontalPadding()
             .applyScreenBackground()
             .navigationBarTitleDisplayMode(.inline)
             .zashiBack()
@@ -55,67 +60,278 @@ public struct PIRVerificationView: View {
         }
     }
     
+    // MARK: - Configuration Section
+    
     @ViewBuilder
-    private func serverUrlField() -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("PIR Server URL")
-                .zFont(.medium, size: 14, style: Design.Text.tertiary)
+    private func configurationSection() -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(title: "⚙️ Configuration")
             
-            TextField(
-                "Server URL",
-                text: Binding(
-                    get: { store.serverURL },
-                    set: { store.send(.updateServerURL($0)) }
-                )
-            )
-            .textFieldStyle(.roundedBorder)
-            .autocapitalization(.none)
-            .disableAutocorrection(true)
-            .zFont(size: 14, style: Design.Text.primary)
+            VStack(spacing: 12) {
+                // Protocol Selection
+                HStack {
+                    Text("Protocol")
+                        .zFont(.medium, size: 14, style: Design.Text.tertiary)
+                    
+                    Spacer()
+                    
+                    Menu {
+                        ForEach(PIRVerification.State.PIRProtocol.allCases, id: \.self) { proto in
+                            Button(proto.displayName) {
+                                store.send(.selectProtocol(proto))
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(store.selectedProtocol.displayName)
+                                .zFont(.medium, size: 14, style: Design.Text.primary)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 10))
+                                .foregroundColor(Asset.Colors.primary.color)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Design.Surfaces.bgTertiary.color(colorScheme))
+                        )
+                    }
+                }
+                
+                // Connection Status
+                HStack {
+                    Text("Status")
+                        .zFont(.medium, size: 14, style: Design.Text.tertiary)
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(connectionStatusColor)
+                            .frame(width: 8, height: 8)
+                        Text(store.connectionStatusText)
+                            .zFont(.medium, size: 14, style: Design.Text.primary)
+                    }
+                }
+                
+                // Server URL (editable when disconnected)
+                if !store.connectionState.isConnected {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Server URL")
+                            .zFont(.medium, size: 14, style: Design.Text.tertiary)
+                        
+                        TextField(
+                            "http://localhost:8080",
+                            text: Binding(
+                                get: { store.serverURL },
+                                set: { store.send(.updateServerURL($0)) }
+                            )
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                        .zFont(size: 14, style: Design.Text.primary)
+                    }
+                } else if let info = store.serverInfo {
+                    Text("Server: \(store.serverURL)")
+                        .zFont(size: 12, style: Design.Text.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                
+                // Technical Details Toggle
+                Button {
+                    store.send(.toggleTechnicalDetails)
+                } label: {
+                    HStack {
+                        Text(store.showTechnicalDetails ? "Hide Technical Details" : "Show Technical Details")
+                            .zFont(.medium, size: 14, style: Design.Text.primary)
+                        Spacer()
+                        Image(systemName: store.showTechnicalDetails ? "chevron.up" : "chevron.down")
+                            .foregroundColor(Asset.Colors.primary.color)
+                    }
+                }
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background {
-            RoundedRectangle(cornerRadius: Design.Radius._lg)
-                .fill(Design.Surfaces.bgSecondary.color(colorScheme))
+        .sectionCard(colorScheme: colorScheme)
+    }
+    
+    private var connectionStatusColor: Color {
+        switch store.connectionState {
+        case .disconnected, .failed:
+            return .red
+        case .connecting, .preparingKeys:
+            return .orange
+        case .connected:
+            return .green
         }
+    }
+    
+    // MARK: - Test Mode Section
+    
+    @ViewBuilder
+    private func testModeSection() -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(title: "🔬 Test Mode")
+            
+            Text("Test PIR with known nullifiers to verify correctness.")
+                .zFont(size: 14, style: Design.Text.tertiary)
+            
+            HStack(spacing: 12) {
+                Button {
+                    store.send(.runTest(.unspent))
+                } label: {
+                    HStack {
+                        if case .running(.unspent) = store.testResult {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        }
+                        Text("Test Unspent")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Design.Surfaces.bgTertiary.color(colorScheme))
+                    )
+                }
+                .disabled(store.isOperationInProgress)
+                
+                Button {
+                    store.send(.runTest(.spent))
+                } label: {
+                    HStack {
+                        if case .running(.spent) = store.testResult {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        }
+                        Text("Test Known Spent")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Design.Surfaces.bgTertiary.color(colorScheme))
+                    )
+                }
+                .disabled(store.isOperationInProgress)
+            }
+            .zFont(.medium, size: 14, style: Design.Text.primary)
+            
+            // Test Result
+            testResultView()
+        }
+        .sectionCard(colorScheme: colorScheme)
+    }
+    
+    @ViewBuilder
+    private func testResultView() -> some View {
+        switch store.testResult {
+        case .none:
+            EmptyView()
+            
+        case .running(let testType):
+            HStack {
+                ProgressView()
+                    .scaleEffect(0.8)
+                Text("Running \(testType.rawValue) test...")
+                    .zFont(size: 14, style: Design.Text.tertiary)
+            }
+            
+        case .passed(let testType, let spentInfo):
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("Test passed: correctly identified as \(testType == .spent ? "spent" : "unspent")")
+                        .zFont(.medium, size: 14, style: Design.Text.primary)
+                }
+                
+                if let info = spentInfo {
+                    Text("Block \(info.blockHeight.formatted()) • TX #\(info.txIndex)")
+                        .zFont(size: 12, style: Design.Text.tertiary)
+                }
+            }
+            
+        case .failed(let testType, let error):
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.red)
+                    Text("Test failed")
+                        .zFont(.medium, size: 14, style: Design.Text.primary)
+                }
+                Text(error)
+                    .zFont(size: 12, style: Design.Text.tertiary)
+            }
+        }
+    }
+    
+    // MARK: - Verification Section
+    
+    @ViewBuilder
+    private func verificationSection() -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(title: "💰 Verify Wallet")
+            
+            // Status illustration
+            illustration()
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+            
+            // Status message
+            Text(store.statusMessage)
+                .zFont(size: 14, style: Design.Text.tertiary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+            
+            // Action button
+            actionButton()
+                .padding(.top, 8)
+            
+            // Last verified
+            if let lastVerified = store.lastVerified {
+                Text("Last verified: \(lastVerified, style: .relative) ago")
+                    .zFont(size: 12, style: Design.Text.tertiary)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .sectionCard(colorScheme: colorScheme)
     }
     
     @ViewBuilder
     private func illustration() -> some View {
         ZStack {
             Circle()
-                .fill(Design.Surfaces.bgSecondary.color(colorScheme))
-                .frame(width: 120, height: 120)
+                .fill(Design.Surfaces.bgTertiary.color(colorScheme))
+                .frame(width: 100, height: 100)
             
             switch store.verificationState {
             case .idle:
-                Asset.Assets.Icons.shieldZap.image
+                Image(systemName: "shield.fill")
                     .resizable()
-                    .renderingMode(.template)
                     .foregroundColor(Asset.Colors.primary.color)
-                    .frame(width: 48, height: 48)
+                    .frame(width: 40, height: 40)
                 
             case .connecting, .preparingKeys:
                 ProgressView()
-                    .scaleEffect(2.0)
+                    .scaleEffect(1.5)
                 
             case .verifying:
                 ZStack {
                     Circle()
                         .stroke(Design.Surfaces.strokeSecondary.color(colorScheme), lineWidth: 4)
-                        .frame(width: 80, height: 80)
+                        .frame(width: 70, height: 70)
                     
-                    Asset.Assets.shield.image
+                    Image(systemName: "shield.fill")
                         .resizable()
-                        .renderingMode(.template)
                         .foregroundColor(Asset.Colors.primary.color)
-                        .frame(width: 32, height: 32)
+                        .frame(width: 28, height: 28)
                     
                     Circle()
                         .trim(from: 0, to: progressValue())
                         .stroke(Asset.Colors.primary.color, lineWidth: 4)
-                        .frame(width: 80, height: 80)
+                        .frame(width: 70, height: 70)
                         .rotationEffect(.degrees(-90))
                         .animation(.easeInOut(duration: 0.3), value: progressValue())
                 }
@@ -123,38 +339,26 @@ public struct PIRVerificationView: View {
             case .completed(_, let newlySpent):
                 Image(systemName: newlySpent == 0 ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
                     .resizable()
-                    .foregroundColor(newlySpent == 0 ? Asset.Colors.primary.color : .orange)
-                    .frame(width: 48, height: 48)
+                    .foregroundColor(newlySpent == 0 ? .green : .orange)
+                    .frame(width: 40, height: 40)
                 
             case .failed:
                 Image(systemName: "xmark.shield.fill")
                     .resizable()
                     .foregroundColor(.red)
-                    .frame(width: 48, height: 48)
+                    .frame(width: 40, height: 40)
             }
         }
     }
     
     @ViewBuilder
-    private func statusContent() -> some View {
-        VStack(spacing: 12) {
-            Text(statusTitle())
-                .zFont(.semiBold, size: 20, style: Design.Text.primary)
-            
-            Text(store.statusMessage)
-                .zFont(size: 14, style: Design.Text.tertiary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-    
-    @ViewBuilder
-    private func actionButtons() -> some View {
+    private func actionButton() -> some View {
         switch store.verificationState {
         case .idle, .failed:
-            ZashiButton("Start Private Verification") {
+            ZashiButton("Verify Balance Privately") {
                 store.send(.startVerification)
             }
+            .disabled(store.isOperationInProgress)
             
         case .connecting, .preparingKeys, .verifying:
             ZashiButton("Cancel", type: .secondary) {
@@ -168,28 +372,197 @@ public struct PIRVerificationView: View {
         }
     }
     
-    private func statusTitle() -> String {
-        switch store.verificationState {
-        case .idle:
-            return "Private Balance Verification"
-        case .connecting:
-            return "Connecting..."
-        case .preparingKeys:
-            return "Preparing Keys..."
-        case .verifying:
-            return "Verifying..."
-        case .completed:
-            return "Verification Complete"
-        case .failed:
-            return "Verification Failed"
-        }
-    }
-    
     private func progressValue() -> CGFloat {
         if case .verifying(let progress, let total) = store.verificationState {
             return CGFloat(progress) / CGFloat(total)
         }
         return 0
+    }
+    
+    // MARK: - Metrics Section
+    
+    @ViewBuilder
+    private func metricsSection(_ metrics: QueryMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(title: "📊 Performance Metrics")
+            
+            // Timing breakdown
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Timing Breakdown")
+                    .zFont(.medium, size: 14, style: Design.Text.tertiary)
+                
+                HStack(spacing: 8) {
+                    timingColumn("Query Gen", "\(metrics.queryGenerationMs)ms")
+                    timingColumn("Network", "\(metrics.networkMs)ms")
+                    timingColumn("Server", "\(metrics.serverProcessingMs)ms")
+                    timingColumn("Decrypt", "\(metrics.decryptionMs)ms")
+                }
+                
+                Text("Total: \(metrics.totalMs)ms for \(metrics.nullifiersChecked) nullifiers (\(String(format: "%.0f", metrics.perQueryMs))ms/query)")
+                    .zFont(size: 12, style: Design.Text.tertiary)
+            }
+            
+            Divider()
+            
+            // Comparison with sync
+            VStack(alignment: .leading, spacing: 4) {
+                Text("vs Traditional Sync:")
+                    .zFont(.medium, size: 14, style: Design.Text.tertiary)
+                
+                HStack(spacing: 16) {
+                    Label("Time: ~\(metrics.estimatedSyncTimeMs / 60000) min", systemImage: "clock")
+                    Label("Data: ~\(metrics.estimatedSyncBytes / 1_000_000) MB", systemImage: "arrow.down.circle")
+                }
+                .zFont(size: 12, style: Design.Text.tertiary)
+            }
+            
+            Divider()
+            
+            // Privacy note
+            HStack(spacing: 8) {
+                Image(systemName: "lock.shield.fill")
+                    .foregroundColor(.green)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("🔒 Privacy: Server learned nothing")
+                        .zFont(.medium, size: 14, style: Design.Text.primary)
+                    HStack(spacing: 16) {
+                        Text("⚡ Speed: ~\(metrics.speedupFactor)x faster")
+                        Text("📉 Data: ~\(metrics.bandwidthSavingsFactor)x less")
+                    }
+                    .zFont(size: 12, style: Design.Text.tertiary)
+                }
+            }
+        }
+        .sectionCard(colorScheme: colorScheme)
+    }
+    
+    @ViewBuilder
+    private func timingColumn(_ label: String, _ value: String) -> some View {
+        VStack(spacing: 4) {
+            Text(label)
+                .zFont(size: 10, style: Design.Text.tertiary)
+            Text(value)
+                .zFont(.medium, size: 14, style: Design.Text.primary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Design.Surfaces.bgTertiary.color(colorScheme))
+        )
+    }
+    
+    // MARK: - Spent Notes Section
+    
+    @ViewBuilder
+    private func spentNotesSection() -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(title: "⚠️ Found \(store.spentNotesFound.count) Spent Notes")
+            
+            ForEach(store.spentNotesFound) { note in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Block \(note.blockHeight.formatted())")
+                            .zFont(.medium, size: 14, style: Design.Text.primary)
+                        Text("TX #\(note.txIndex) • \(note.discoveredAt, style: .date)")
+                            .zFont(size: 12, style: Design.Text.tertiary)
+                    }
+                    Spacer()
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                }
+                
+                if note.id != store.spentNotesFound.last?.id {
+                    Divider()
+                }
+            }
+            
+            Text("Balance updated automatically.")
+                .zFont(size: 12, style: Design.Text.tertiary)
+        }
+        .sectionCard(colorScheme: colorScheme, borderColor: .orange)
+    }
+    
+    // MARK: - Technical Details Section
+    
+    @ViewBuilder
+    private func technicalDetailsSection() -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(title: "🔧 Technical Details")
+            
+            if let info = store.serverInfo {
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+                    GridRow {
+                        Text("Protocol")
+                            .zFont(size: 12, style: Design.Text.tertiary)
+                        Text("\(info.protocolName) (\(store.selectedProtocol.description))")
+                            .zFont(size: 12, style: Design.Text.primary)
+                    }
+                    
+                    if let lweDim = info.lweDim, let ringDim = info.ringDim {
+                        GridRow {
+                            Text("Dimensions")
+                                .zFont(size: 12, style: Design.Text.tertiary)
+                            Text("LWE: \(lweDim) | Ring: \(ringDim)")
+                                .zFont(size: 12, style: Design.Text.primary)
+                        }
+                    }
+                    
+                    GridRow {
+                        Text("Records")
+                            .zFont(size: 12, style: Design.Text.tertiary)
+                        Text("\(formatNumber(info.numNullifiers)) nullifiers")
+                            .zFont(size: 12, style: Design.Text.primary)
+                    }
+                    
+                    GridRow {
+                        Text("Keyword Method")
+                            .zFont(size: 12, style: Design.Text.tertiary)
+                        Text("\(info.keywordMethod) (2 queries per lookup)")
+                            .zFont(size: 12, style: Design.Text.primary)
+                    }
+                }
+            } else {
+                Text("Connect to server to see details")
+                    .zFont(size: 12, style: Design.Text.tertiary)
+            }
+        }
+        .sectionCard(colorScheme: colorScheme)
+    }
+    
+    // MARK: - Helpers
+    
+    @ViewBuilder
+    private func sectionHeader(title: String) -> some View {
+        Text(title)
+            .zFont(.semiBold, size: 16, style: Design.Text.primary)
+    }
+    
+    private func formatNumber(_ n: Int) -> String {
+        if n >= 1_000_000 {
+            return String(format: "%.1fM", Double(n) / 1_000_000)
+        } else if n >= 1_000 {
+            return String(format: "%.1fK", Double(n) / 1_000)
+        }
+        return "\(n)"
+    }
+}
+
+// MARK: - Section Card Modifier
+
+extension View {
+    @ViewBuilder
+    func sectionCard(colorScheme: ColorScheme, borderColor: Color? = nil) -> some View {
+        self
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Design.Surfaces.bgSecondary.color(colorScheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(borderColor ?? Color.clear, lineWidth: borderColor != nil ? 2 : 0)
+            )
     }
 }
 
@@ -200,6 +573,41 @@ public struct PIRVerificationView: View {
         PIRVerificationView(
             store: StoreOf<PIRVerification>(
                 initialState: PIRVerification.State()
+            ) {
+                PIRVerification()
+            }
+        )
+    }
+}
+
+#Preview("Connected with Metrics") {
+    NavigationView {
+        PIRVerificationView(
+            store: StoreOf<PIRVerification>(
+                initialState: {
+                    var state = PIRVerification.State()
+                    state.connectionState = .connected
+                    state.serverInfo = ServerInfo(
+                        protocolName: "YPIR",
+                        numRecords: 6_462_500,
+                        numNullifiers: 51_700_000,
+                        keywordMethod: "Cuckoo",
+                        lweDim: 1024,
+                        ringDim: 1024
+                    )
+                    state.verificationState = .completed(checkedCount: 5, newlySpentCount: 0)
+                    state.lastQueryMetrics = QueryMetrics(
+                        queryGenerationMs: 150,
+                        networkMs: 120,
+                        serverProcessingMs: 80,
+                        decryptionMs: 30,
+                        totalMs: 380,
+                        uploadedBytes: 1_500_000,
+                        downloadedBytes: 800,
+                        nullifiersChecked: 5
+                    )
+                    return state
+                }()
             ) {
                 PIRVerification()
             }
