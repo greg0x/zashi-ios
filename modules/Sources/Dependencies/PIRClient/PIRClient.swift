@@ -111,6 +111,9 @@ public struct PIRClient: Sendable {
     /// Check multiple nullifiers
     public var checkNullifiers: @Sendable ([Data]) async throws -> [SpentInfo?]
     
+    /// Get unspent nullifiers from the wallet database
+    public var getUnspentNullifiers: @Sendable (URL, NetworkType) async throws -> [Data]
+    
     /// Disconnect and cleanup
     public var disconnect: @Sendable () -> Void
 }
@@ -249,6 +252,15 @@ extension PIRClient: DependencyKey {
             checkNullifiers: { nullifiers in
                 try await state.checkNullifiers(nullifiers)
             },
+            getUnspentNullifiers: { dataDbURL, networkType in
+                print("📖 PIRClient: Getting unspent nullifiers from wallet...")
+                let nullifiers = try WalletNullifiers.getUnspentNullifiers(
+                    dataDbURL: dataDbURL,
+                    networkType: networkType
+                )
+                print("📖 PIRClient: Found \(nullifiers.count) unspent nullifiers")
+                return nullifiers
+            },
             disconnect: {
                 Task { await state.disconnect() }
             }
@@ -282,6 +294,14 @@ extension PIRClient: DependencyKey {
             )
         },
         checkNullifiers: { nullifiers in Array(repeating: nil, count: nullifiers.count) },
+        getUnspentNullifiers: { _, _ in
+            // Return test nullifiers for testing
+            [
+                Data(repeating: 0xDE, count: 32),
+                Data(repeating: 0xAD, count: 32),
+                Data(repeating: 0xBE, count: 32)
+            ]
+        },
         disconnect: { }
     )
 }

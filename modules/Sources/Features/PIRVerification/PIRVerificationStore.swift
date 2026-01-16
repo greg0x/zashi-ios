@@ -9,6 +9,8 @@ import Foundation
 import ComposableArchitecture
 import ZcashLightClientKit
 import PIRClient
+import DatabaseFiles
+import ZcashSDKEnvironment
 
 // MARK: - User Defaults Keys
 
@@ -307,7 +309,9 @@ public struct PIRVerification {
             case .verifying(let progress, let total):
                 return "Checking note \(progress) of \(total)..."
             case .completed(let checkedCount, let newlySpentCount):
-                if newlySpentCount == 0 {
+                if checkedCount == 0 {
+                    return "No unspent notes to verify.\nYour wallet may be empty or fully synced."
+                } else if newlySpentCount == 0 {
                     return "✓ Verified \(checkedCount) notes.\nYour balance is accurate."
                 } else {
                     return "Found \(newlySpentCount) newly spent note(s) out of \(checkedCount) checked.\nBalance has been updated."
@@ -392,6 +396,8 @@ public struct PIRVerification {
     
     @Dependency(\.pirClient) var pirClient
     @Dependency(\.date) var date
+    @Dependency(\.databaseFiles) var databaseFiles
+    @Dependency(\.zcashSDKEnvironment) var zcashSDKEnvironment
     
     public init() {}
     
@@ -554,6 +560,8 @@ public struct PIRVerification {
             case .startVerification:
                 state.verificationState = .connecting
                 let serverURL = state.serverURL
+                let network = zcashSDKEnvironment.network
+                let dataDbURL = databaseFiles.dataDbURLFor(network)
                 
                 return .run { send in
                     do {
@@ -564,10 +572,22 @@ public struct PIRVerification {
                         await send(.verificationStateChanged(.preparingKeys))
                         try await pirClient.precomputeKeys()
                         
-                        // Step 3: Generate test nullifiers for demo
-                        // In production, these would come from the wallet's unspent notes
-                        let testNullifiers = generateTestNullifiers(count: 5)
-                        let totalNotes = testNullifiers.count
+                        // Step 3: Get real wallet nullifiers
+                        let walletNullifiers = try await pirClient.getUnspentNullifiers(
+                            dataDbURL,
+                            network.networkType
+                        )
+                        let totalNotes = walletNullifiers.count
+                        
+                        // If no nullifiers, we're done
+                        guard totalNotes > 0 else {
+                            await send(.verificationCompleted(
+                                checkedCount: 0,
+                                newlySpentCount: 0,
+                                spentNotes: []
+                            ))
+                            return
+                        }
                         
                         var spentCount = 0
                         var spentNotes: [SpentNoteInfo] = []
@@ -583,7 +603,7 @@ public struct PIRVerification {
                         let verificationStart = DispatchTime.now()
                         
                         // Step 4: Check each nullifier with timing
-                        for (index, nullifier) in testNullifiers.enumerated() {
+                        for (index, nullifier) in walletNullifiers.enumerated() {
                             await send(.verificationProgress(index + 1, totalNotes))
                             
                             let result = try await pirClient.checkNullifierWithTiming(nullifier)
@@ -722,8 +742,9 @@ public struct PIRVerification {
 
 // MARK: - Test Data Generation
 
-/// Generate test nullifiers for demo purposes.
-/// In production, these would come from the wallet's unspent notes.
+/// Generate synthetic test nullifiers for testing PIR infrastructure.
+/// These are NOT real nullifiers - used only for test mode validation.
+/// Real wallet verification uses WalletNullifiers.getUnspentNullifiers().
 private func generateTestNullifiers(count: Int) -> [Data] {
     // Generate deterministic test nullifiers based on index
     // These are NOT real nullifiers - just for demo/testing
