@@ -10,6 +10,14 @@ import ComposableArchitecture
 import ZcashLightClientKit
 import PIRClient
 
+// MARK: - User Defaults Keys
+
+private enum PIRUserDefaultsKeys {
+    static let serverURL = "pir.serverURL"
+    static let selectedProtocol = "pir.selectedProtocol"
+    static let showTechnicalDetails = "pir.showTechnicalDetails"
+}
+
 // MARK: - Test Nullifiers
 
 /// Known test nullifiers for validating PIR correctness.
@@ -221,10 +229,13 @@ public struct PIRVerification {
         
         // MARK: State Properties
         
-        // Configuration
+        // Configuration (loaded from UserDefaults)
         public var selectedProtocol: PIRProtocol = .ypir
         public var serverURL: String = "http://localhost:8080"
         public var showTechnicalDetails: Bool = false
+        
+        // UI state
+        public var showRetryOption: Bool = false
         
         // Connection
         public var connectionState: ConnectionState = .disconnected
@@ -246,6 +257,33 @@ public struct PIRVerification {
         
         // Alert
         @Presents public var alert: AlertState<Action.Alert>?
+        
+        // MARK: Initializer
+        
+        public init() {
+            // Load persisted settings
+            let defaults = UserDefaults.standard
+            
+            if let savedURL = defaults.string(forKey: PIRUserDefaultsKeys.serverURL), !savedURL.isEmpty {
+                self.serverURL = savedURL
+            }
+            
+            if let savedProtocol = defaults.string(forKey: PIRUserDefaultsKeys.selectedProtocol),
+               let proto = PIRProtocol(rawValue: savedProtocol) {
+                self.selectedProtocol = proto
+            }
+            
+            self.showTechnicalDetails = defaults.bool(forKey: PIRUserDefaultsKeys.showTechnicalDetails)
+        }
+        
+        // MARK: Persistence
+        
+        public func saveToUserDefaults() {
+            let defaults = UserDefaults.standard
+            defaults.set(serverURL, forKey: PIRUserDefaultsKeys.serverURL)
+            defaults.set(selectedProtocol.rawValue, forKey: PIRUserDefaultsKeys.selectedProtocol)
+            defaults.set(showTechnicalDetails, forKey: PIRUserDefaultsKeys.showTechnicalDetails)
+        }
         
         // MARK: Computed Properties
         
@@ -304,8 +342,6 @@ public struct PIRVerification {
                 return "green"
             }
         }
-        
-        public init() {}
     }
     
     // MARK: - Actions
@@ -343,6 +379,9 @@ public struct PIRVerification {
         // Metrics
         case updateMetrics(QueryMetrics)
         
+        // Retry
+        case retryLastOperation
+        
         @CasePathable
         public enum Alert: Equatable {
             case cancel
@@ -377,6 +416,7 @@ public struct PIRVerification {
                 
             case .selectProtocol(let proto):
                 state.selectedProtocol = proto
+                state.saveToUserDefaults()
                 // Disconnect and reconnect when protocol changes
                 if state.connectionState.isConnected {
                     pirClient.disconnect()
@@ -387,10 +427,12 @@ public struct PIRVerification {
                 
             case .updateServerURL(let url):
                 state.serverURL = url
+                state.saveToUserDefaults()
                 return .none
                 
             case .toggleTechnicalDetails:
                 state.showTechnicalDetails.toggle()
+                state.saveToUserDefaults()
                 return .none
                 
             // MARK: Connection
@@ -647,6 +689,30 @@ public struct PIRVerification {
                 
             case .updateMetrics(let metrics):
                 state.lastQueryMetrics = metrics
+                return .none
+                
+            // MARK: Retry
+                
+            case .retryLastOperation:
+                // Reset failed state and retry
+                switch state.verificationState {
+                case .failed:
+                    state.verificationState = .idle
+                    return .send(.startVerification)
+                default:
+                    break
+                }
+                
+                if case .failed = state.testResult {
+                    state.testResult = .none
+                    // Can't easily know which test failed, so just reset
+                }
+                
+                if case .failed = state.connectionState {
+                    state.connectionState = .disconnected
+                    return .send(.connect)
+                }
+                
                 return .none
             }
         }

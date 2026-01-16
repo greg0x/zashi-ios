@@ -131,8 +131,29 @@ public struct PIRVerificationView: View {
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
                         .zFont(size: 14, style: Design.Text.primary)
+                        
+                        // Connection error with retry
+                        if case .failed(let error) = store.connectionState {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.red)
+                                Text(error)
+                                    .zFont(size: 12, style: Design.Text.tertiary)
+                                    .lineLimit(2)
+                                
+                                Spacer()
+                                
+                                Button {
+                                    store.send(.connect)
+                                } label: {
+                                    Text("Retry")
+                                        .zFont(.medium, size: 12, style: Design.Text.primary)
+                                }
+                            }
+                            .padding(.top, 4)
+                        }
                     }
-                } else if let info = store.serverInfo {
+                } else if store.serverInfo != nil {
                     Text("Server: \(store.serverURL)")
                         .zFont(size: 12, style: Design.Text.tertiary)
                         .lineLimit(1)
@@ -254,7 +275,7 @@ public struct PIRVerificationView: View {
             }
             
         case .failed(let testType, let error):
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.red)
@@ -263,6 +284,19 @@ public struct PIRVerificationView: View {
                 }
                 Text(error)
                     .zFont(size: 12, style: Design.Text.tertiary)
+                
+                Button {
+                    store.send(.runTest(testType))
+                } label: {
+                    Text("Retry")
+                        .zFont(.medium, size: 12, style: Design.Text.primary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Design.Surfaces.bgTertiary.color(colorScheme))
+                        )
+                }
             }
         }
     }
@@ -354,11 +388,25 @@ public struct PIRVerificationView: View {
     @ViewBuilder
     private func actionButton() -> some View {
         switch store.verificationState {
-        case .idle, .failed:
+        case .idle:
             ZashiButton("Verify Balance Privately") {
                 store.send(.startVerification)
             }
             .disabled(store.isOperationInProgress)
+            
+        case .failed:
+            VStack(spacing: 12) {
+                ZashiButton("Retry Verification") {
+                    store.send(.retryLastOperation)
+                }
+                
+                Button {
+                    store.send(.verificationStateChanged(.idle))
+                } label: {
+                    Text("Dismiss")
+                        .zFont(.medium, size: 14, style: Design.Text.tertiary)
+                }
+            }
             
         case .connecting, .preparingKeys, .verifying:
             ZashiButton("Cancel", type: .secondary) {
