@@ -168,18 +168,26 @@ public struct PIRVerification {
     public struct State: Equatable {
         // MARK: Protocol Selection
         
-        public enum PIRProtocol: String, CaseIterable, Equatable {
-            case ypir = "YPIR"
+        public enum PIRProtocolSelection: String, CaseIterable, Equatable {
             case inspire = "InsPIRe"
+            case ypir = "YPIR"
             
             public var displayName: String { rawValue }
             
             public var description: String {
                 switch self {
-                case .ypir:
-                    return "DoublePIR + LWE-to-RLWE packing"
                 case .inspire:
-                    return "Simplex-based PIR (coming soon)"
+                    return "~416 KB queries, ~3s key prep"
+                case .ypir:
+                    return "~5.8 MB queries, ~25s key prep"
+                }
+            }
+            
+            /// Convert to SDK protocol type
+            public var sdkProtocol: ZcashLightClientKit.PIRProtocol {
+                switch self {
+                case .ypir: return .ypir
+                case .inspire: return .inspire
                 }
             }
         }
@@ -232,7 +240,7 @@ public struct PIRVerification {
         // MARK: State Properties
         
         // Configuration (loaded from UserDefaults)
-        public var selectedProtocol: PIRProtocol = .ypir
+        public var selectedProtocol: PIRProtocolSelection = .inspire
         public var serverURL: String = "http://localhost:8000"
         public var showTechnicalDetails: Bool = false
         
@@ -271,7 +279,7 @@ public struct PIRVerification {
             }
             
             if let savedProtocol = defaults.string(forKey: PIRUserDefaultsKeys.selectedProtocol),
-               let proto = PIRProtocol(rawValue: savedProtocol) {
+               let proto = PIRProtocolSelection(rawValue: savedProtocol) {
                 self.selectedProtocol = proto
             }
             
@@ -358,7 +366,7 @@ public struct PIRVerification {
         case onDisappear
         
         // Protocol & Configuration
-        case selectProtocol(State.PIRProtocol)
+        case selectProtocol(State.PIRProtocolSelection)
         case updateServerURL(String)
         case toggleTechnicalDetails
         
@@ -446,14 +454,16 @@ public struct PIRVerification {
             case .connect:
                 state.connectionState = .connecting
                 let serverURL = state.serverURL
+                let pirProtocol = state.selectedProtocol.sdkProtocol
+                let protocolName = state.selectedProtocol.displayName
                 
                 return .run { send in
                     do {
-                        try await pirClient.connect(serverURL)
+                        try await pirClient.connect(serverURL, pirProtocol)
                         
                         // Build server info (would be fetched from /health endpoint)
                         let serverInfo = ServerInfo(
-                            protocolName: "YPIR",
+                            protocolName: protocolName,
                             numRecords: 0,
                             numNullifiers: 51_700_000,
                             keywordMethod: "Cuckoo",
@@ -491,12 +501,13 @@ public struct PIRVerification {
                 
                 state.testResult = .running(testType)
                 let serverURL = state.serverURL
+                let pirProtocol = state.selectedProtocol.sdkProtocol
                 let nullifier = testType == .spent ? TestNullifiers.knownSpent : TestNullifiers.syntheticUnspent
                 
                 return .run { send in
                     do {
                         // Connect if needed
-                        try await pirClient.connect(serverURL)
+                        try await pirClient.connect(serverURL, pirProtocol)
                         
                         // Precompute keys if needed
                         if !pirClient.keysReady() {
@@ -560,13 +571,14 @@ public struct PIRVerification {
             case .startVerification:
                 state.verificationState = .connecting
                 let serverURL = state.serverURL
+                let pirProtocol = state.selectedProtocol.sdkProtocol
                 let network = zcashSDKEnvironment.network
                 let dataDbURL = databaseFiles.dataDbURLFor(network)
                 
                 return .run { send in
                     do {
                         // Step 1: Connect to PIR server
-                        try await pirClient.connect(serverURL)
+                        try await pirClient.connect(serverURL, pirProtocol)
                         
                         // Step 2: Precompute keys
                         await send(.verificationStateChanged(.preparingKeys))

@@ -76,7 +76,7 @@ public struct PIRVerificationView: View {
                     Spacer()
                     
                     Menu {
-                        ForEach(PIRVerification.State.PIRProtocol.allCases, id: \.self) { proto in
+                        ForEach(PIRVerification.State.PIRProtocolSelection.allCases, id: \.self) { proto in
                             Button(proto.displayName) {
                                 store.send(.selectProtocol(proto))
                             }

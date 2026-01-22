@@ -90,8 +90,8 @@ public struct PIRServerInfo: Equatable, Sendable {
 
 /// TCA dependency for PIR operations.
 public struct PIRClient: Sendable {
-    /// Create and connect to PIR server
-    public var connect: @Sendable (String) async throws -> Void
+    /// Create and connect to PIR server with specified protocol
+    public var connect: @Sendable (String, PIRProtocol) async throws -> Void
     
     /// Fetch server info (health check)
     public var fetchServerInfo: @Sendable () async throws -> PIRServerInfo
@@ -123,15 +123,18 @@ extension PIRClient: DependencyKey {
         // Actor to hold the client state
         actor PIRClientState {
             var client: NullifierPIRClient?
+            var currentProtocol: PIRProtocol = .inspire
             
-            func connect(serverURL: String) async throws {
-                client = try NullifierPIRClient(serverURL: serverURL)
+            func connect(serverURL: String, protocol pirProtocol: PIRProtocol) async throws {
+                currentProtocol = pirProtocol
+                client = try NullifierPIRClient(serverURL: serverURL, protocol: pirProtocol)
             }
             
             func fetchServerInfo() async throws -> PIRServerInfo {
                 // For now, return placeholder - would fetch from /health endpoint
+                let protocolName = currentProtocol == .inspire ? "InsPIRe" : "YPIR"
                 return PIRServerInfo(
-                    protocolName: "YPIR",
+                    protocolName: protocolName,
                     numNullifiers: 51_700_000,
                     numBuckets: 6_462_500,
                     lweDim: 1024,
@@ -219,9 +222,9 @@ extension PIRClient: DependencyKey {
         let state = PIRClientState()
         
         return PIRClient(
-            connect: { serverURL in
-                print("🔌 PIRClient: Connecting to \(serverURL)")
-                try await state.connect(serverURL: serverURL)
+            connect: { serverURL, pirProtocol in
+                print("🔌 PIRClient: Connecting to \(serverURL) with protocol \(pirProtocol)")
+                try await state.connect(serverURL: serverURL, protocol: pirProtocol)
                 print("✅ PIRClient: Connected successfully")
             },
             fetchServerInfo: {
@@ -268,7 +271,7 @@ extension PIRClient: DependencyKey {
     }()
     
     public static let testValue = PIRClient(
-        connect: { _ in },
+        connect: { _, _ in },
         fetchServerInfo: { 
             PIRServerInfo(
                 protocolName: "YPIR",
