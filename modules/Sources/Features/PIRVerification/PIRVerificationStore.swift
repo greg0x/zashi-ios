@@ -233,7 +233,7 @@ public struct PIRVerification {
         
         // Configuration (loaded from UserDefaults)
         public var selectedProtocol: PIRProtocol = .ypir
-        public var serverURL: String = "http://localhost:8080"
+        public var serverURL: String = "http://localhost:8000"
         public var showTechnicalDetails: Bool = false
         
         // UI state

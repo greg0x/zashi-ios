@@ -121,7 +121,7 @@ public struct PIRVerificationView: View {
                             .zFont(.medium, size: 14, style: Design.Text.tertiary)
                         
                         TextField(
-                            "http://localhost:8080",
+                            "http://localhost:8000",
                             text: Binding(
                                 get: { store.serverURL },
                                 set: { store.send(.updateServerURL($0)) }
