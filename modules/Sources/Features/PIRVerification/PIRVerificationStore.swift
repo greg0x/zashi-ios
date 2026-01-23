@@ -138,6 +138,40 @@ public struct ServerInfo: Equatable {
         self.lweDim = lweDim
         self.ringDim = ringDim
     }
+    
+    /// Estimated bytes for traditional sync (downloading all nullifiers)
+    /// Each nullifier is 32 bytes
+    public var estimatedTraditionalSyncBytes: Int {
+        numNullifiers * 32
+    }
+    
+    /// Estimated time for traditional sync in milliseconds
+    /// Assumes ~10 MB/s effective throughput (download + processing)
+    public var estimatedTraditionalSyncMs: Int {
+        let bytes = estimatedTraditionalSyncBytes
+        let bytesPerMs = 10_000 // 10 MB/s = 10,000 bytes/ms
+        return max(1000, bytes / bytesPerMs) // At least 1 second
+    }
+    
+    /// Fetch server info from /health endpoint
+    public static func fetch(from serverURL: String) async throws -> ServerInfo {
+        let healthURL = serverURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/health"
+        guard let url = URL(string: healthURL) else {
+            throw URLError(.badURL)
+        }
+        
+        let (data, _) = try await URLSession.shared.data(from: url)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+        
+        return ServerInfo(
+            protocolName: (json["protocols"] as? [String])?.first ?? "unknown",
+            numRecords: json["num_buckets"] as? Int ?? 0,
+            numNullifiers: json["num_nullifiers"] as? Int ?? 0,
+            keywordMethod: "BinaryFuse",
+            lweDim: 1024,
+            ringDim: 1024
+        )
+    }
 }
 
 /// Info about a spent note discovered via PIR
@@ -459,17 +493,11 @@ public struct PIRVerification {
                 
                 return .run { send in
                     do {
-                        try await pirClient.connect(serverURL, pirProtocol)
+                        // Fetch real server info from /health endpoint
+                        let serverInfo = try await ServerInfo.fetch(from: serverURL)
                         
-                        // Build server info (would be fetched from /health endpoint)
-                        let serverInfo = ServerInfo(
-                            protocolName: protocolName,
-                            numRecords: 0,
-                            numNullifiers: 51_700_000,
-                            keywordMethod: "Cuckoo",
-                            lweDim: 1024,
-                            ringDim: 1024
-                        )
+                        // Connect to the PIR server
+                        try await pirClient.connect(serverURL, pirProtocol)
                         
                         await send(.connectionSucceeded(serverInfo))
                     } catch {
@@ -503,9 +531,13 @@ public struct PIRVerification {
                 let serverURL = state.serverURL
                 let pirProtocol = state.selectedProtocol.sdkProtocol
                 let nullifier = testType == .spent ? TestNullifiers.knownSpent : TestNullifiers.syntheticUnspent
+                let serverInfo = state.serverInfo
                 
                 return .run { send in
                     do {
+                        // Fetch server info if we don't have it
+                        let info = serverInfo ?? (try? await ServerInfo.fetch(from: serverURL))
+                        
                         // Connect if needed
                         try await pirClient.connect(serverURL, pirProtocol)
                         
@@ -517,7 +549,7 @@ public struct PIRVerification {
                         // Check the nullifier with timing
                         let result = try await pirClient.checkNullifierWithTiming(nullifier)
                         
-                        // Update metrics
+                        // Update metrics with real estimates from server
                         let metrics = QueryMetrics(
                             queryGenerationMs: result.timing.queryGenerationMs,
                             networkMs: result.timing.networkMs,
@@ -526,7 +558,9 @@ public struct PIRVerification {
                             totalMs: result.timing.totalMs,
                             uploadedBytes: result.timing.uploadBytes,
                             downloadedBytes: result.timing.downloadBytes,
-                            nullifiersChecked: 1
+                            nullifiersChecked: 1,
+                            estimatedSyncTimeMs: info?.estimatedTraditionalSyncMs ?? 720_000,
+                            estimatedSyncBytes: info?.estimatedTraditionalSyncBytes ?? 1_600_000_000
                         )
                         await send(.updateMetrics(metrics))
                         await send(.testCompleted(testType, result.spentInfo))
@@ -574,9 +608,13 @@ public struct PIRVerification {
                 let pirProtocol = state.selectedProtocol.sdkProtocol
                 let network = zcashSDKEnvironment.network
                 let dataDbURL = databaseFiles.dataDbURLFor(network)
+                let existingServerInfo = state.serverInfo
                 
                 return .run { send in
                     do {
+                        // Fetch server info if we don't have it
+                        let serverInfo = existingServerInfo ?? (try? await ServerInfo.fetch(from: serverURL))
+                        
                         // Step 1: Connect to PIR server
                         try await pirClient.connect(serverURL, pirProtocol)
                         
@@ -640,7 +678,7 @@ public struct PIRVerification {
                         let verificationEnd = DispatchTime.now()
                         let totalMs = Int((verificationEnd.uptimeNanoseconds - verificationStart.uptimeNanoseconds) / 1_000_000)
                         
-                        // Update metrics
+                        // Update metrics with real estimates from server
                         let metrics = QueryMetrics(
                             queryGenerationMs: totalQueryGenMs,
                             networkMs: totalNetworkMs,
@@ -649,7 +687,9 @@ public struct PIRVerification {
                             totalMs: totalMs,
                             uploadedBytes: totalUploadBytes,
                             downloadedBytes: totalDownloadBytes,
-                            nullifiersChecked: totalNotes
+                            nullifiersChecked: totalNotes,
+                            estimatedSyncTimeMs: serverInfo?.estimatedTraditionalSyncMs ?? 720_000,
+                            estimatedSyncBytes: serverInfo?.estimatedTraditionalSyncBytes ?? 1_600_000_000
                         )
                         await send(.updateMetrics(metrics))
                         
