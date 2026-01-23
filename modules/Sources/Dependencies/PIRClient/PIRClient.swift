@@ -169,47 +169,33 @@ extension PIRClient: DependencyKey {
                 
                 let totalStart = DispatchTime.now()
                 
-                // Network + server timing (this is what we can actually measure)
-                let networkStart = DispatchTime.now()
-                let result = try await client.checkNullifier(nullifier)
-                let networkEnd = DispatchTime.now()
-                
-                // Calculate total network time (includes query gen, network, server, decrypt)
-                let networkNanos = networkEnd.uptimeNanoseconds - networkStart.uptimeNanoseconds
-                let totalNetworkMs = Int(networkNanos / 1_000_000)
+                // Use the new FFI method that returns actual byte counts
+                let result = try await client.checkNullifierWithStats(nullifier)
                 
                 let totalEnd = DispatchTime.now()
                 let totalMs = Int((totalEnd.uptimeNanoseconds - totalStart.uptimeNanoseconds) / 1_000_000)
                 
-                // Protocol-specific estimates based on actual measurements:
-                // Each nullifier lookup queries 2 Cuckoo buckets.
-                // Per bucket (from README):
-                //   YPIR:    ~2MB query,  ~1MB response
-                //   InsPIRe: ~19KB query, ~43KB response
-                let (uploadBytes, downloadBytes, queryGenMs, serverMs, decryptMs): (Int, Int, Int, Int, Int)
+                // Use actual bytes from FFI, estimate timing breakdown
+                let uploadBytes = result.stats.uploadBytes
+                let downloadBytes = result.stats.downloadBytes
+                let serverMs = Int(result.stats.serverTimeMs ?? 50)
                 
+                // Estimate other timings based on protocol
+                let (queryGenMs, decryptMs): (Int, Int)
                 switch currentProtocol {
                 case .ypir:
-                    // YPIR: 2 buckets × ~2MB query, 2 × ~1MB response
-                    uploadBytes = 2 * 2_000_000    // ~4 MB
-                    downloadBytes = 2 * 1_000_000  // ~2 MB
-                    queryGenMs = 10                // Fast query gen
-                    serverMs = 100                 // Slower server
-                    decryptMs = 50                 // Slower decrypt
+                    queryGenMs = 10
+                    decryptMs = 50
                 case .inspire:
-                    // InsPIRe: 2 buckets × ~19KB query, 2 × ~43KB response
-                    uploadBytes = 2 * 19_000       // ~40 KB
-                    downloadBytes = 2 * 43_000     // ~86 KB
-                    queryGenMs = 600               // Slower query gen
-                    serverMs = 50                  // Fast server
-                    decryptMs = 14                 // Fast decrypt
+                    queryGenMs = 600
+                    decryptMs = 14
                 }
                 
-                // Estimate network time by subtracting local processing from total
-                let estimatedNetworkMs = max(0, totalNetworkMs - queryGenMs - serverMs - decryptMs)
+                // Network time is remainder after local processing
+                let estimatedNetworkMs = max(0, totalMs - queryGenMs - serverMs - decryptMs)
                 
                 return PIRCheckResult(
-                    spentInfo: result,
+                    spentInfo: result.spentInfo,
                     timing: PIRQueryTiming(
                         queryGenerationMs: queryGenMs,
                         networkMs: estimatedNetworkMs,
