@@ -604,13 +604,9 @@ public struct PIRVerification {
                 let serverURL = state.serverURL
                 let pirProtocol = state.selectedProtocol.sdkProtocol
                 let nullifier = testType == .spent ? TestNullifiers.knownSpent : TestNullifiers.syntheticUnspent
-                let serverInfo = state.serverInfo
                 
                 return .run { send in
                     do {
-                        // Fetch server info if we don't have it
-                        let info = serverInfo ?? (try? await ServerInfo.fetch(from: serverURL))
-                        
                         // Connect if needed
                         try await pirClient.connect(serverURL, pirProtocol)
                         
@@ -681,13 +677,9 @@ public struct PIRVerification {
                 let pirProtocol = state.selectedProtocol.sdkProtocol
                 let network = zcashSDKEnvironment.network
                 let dataDbURL = databaseFiles.dataDbURLFor(network)
-                let existingServerInfo = state.serverInfo
                 
                 return .run { send in
                     do {
-                        // Fetch server info if we don't have it
-                        let serverInfo = existingServerInfo ?? (try? await ServerInfo.fetch(from: serverURL))
-                        
                         // Step 1: Connect to PIR server
                         try await pirClient.connect(serverURL, pirProtocol)
                         

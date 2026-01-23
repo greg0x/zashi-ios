@@ -452,16 +452,56 @@ public struct PIRVerificationView: View {
             
             Divider()
             
-            // Comparison with sync
-            VStack(alignment: .leading, spacing: 4) {
-                Text("vs Traditional Sync:")
+            // Comparison with traditional sync
+            VStack(alignment: .leading, spacing: 8) {
+                Text("vs Traditional Sync (oldest note scenario):")
                     .zFont(.medium, size: 14, style: Design.Text.tertiary)
                 
+                // Show the comparison
                 HStack(spacing: 16) {
-                    Label("Time: ~\(metrics.estimatedSyncTimeMs / 60000) min", systemImage: "clock")
-                    Label("Data: ~\(metrics.estimatedSyncBytes / 1_000_000) MB", systemImage: "arrow.down.circle")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Traditional")
+                            .zFont(size: 10, style: Design.Text.tertiary)
+                        Text(formatBytes(metrics.estimatedSyncBytes))
+                            .zFont(.medium, size: 14, style: Design.Text.primary)
+                    }
+                    
+                    Image(systemName: "arrow.right")
+                        .foregroundColor(Design.Text.tertiary.color(colorScheme))
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("PIR (\(metrics.nullifiersChecked) notes)")
+                            .zFont(size: 10, style: Design.Text.tertiary)
+                        Text(formatBytes(metrics.totalPIRBytes))
+                            .zFont(.medium, size: 14, style: Design.Text.primary)
+                    }
+                    
+                    Spacer()
+                    
+                    if metrics.pirIsMoreEfficient {
+                        Text("✓ \(metrics.bandwidthSavingsFactor)x less")
+                            .zFont(.semiBold, size: 12, style: Design.Utility.SuccessGreen._700)
+                    } else {
+                        Text("Traditional wins")
+                            .zFont(size: 12, style: Design.Text.tertiary)
+                    }
                 }
-                .zFont(size: 12, style: Design.Text.tertiary)
+                
+                // Scenario breakdown
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Traditional sync by scenario:")
+                        .zFont(size: 10, style: Design.Text.tertiary)
+                    HStack(spacing: 12) {
+                        ForEach([TraditionalSyncEstimates.Scenario.oneDay, .oneWeek, .oneMonth], id: \.self) { scenario in
+                            VStack(spacing: 1) {
+                                Text(scenario.rawValue.replacingOccurrences(of: " offline", with: ""))
+                                    .zFont(size: 9, style: Design.Text.tertiary)
+                                Text(scenario.description)
+                                    .zFont(.medium, size: 10, style: Design.Text.primary)
+                            }
+                        }
+                    }
+                }
             }
             
             Divider()
@@ -473,11 +513,8 @@ public struct PIRVerificationView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("🔒 Privacy: Server learned nothing")
                         .zFont(.medium, size: 14, style: Design.Text.primary)
-                    HStack(spacing: 16) {
-                        Text("⚡ Speed: ~\(metrics.speedupFactor)x faster")
-                        Text("📉 Data: ~\(metrics.bandwidthSavingsFactor)x less")
-                    }
-                    .zFont(size: 12, style: Design.Text.tertiary)
+                    Text("PIR query reveals nothing about which nullifier was checked")
+                        .zFont(size: 11, style: Design.Text.tertiary)
                 }
             }
         }
@@ -498,6 +535,21 @@ public struct PIRVerificationView: View {
             RoundedRectangle(cornerRadius: 6)
                 .fill(Design.Surfaces.bgTertiary.color(colorScheme))
         )
+    }
+    
+    /// Format bytes into human-readable string (KB, MB, GB)
+    private func formatBytes(_ bytes: Int) -> String {
+        let kb = Double(bytes) / 1_000
+        let mb = kb / 1_000
+        let gb = mb / 1_000
+        
+        if gb >= 1 {
+            return String(format: "%.2f GB", gb)
+        } else if mb >= 1 {
+            return String(format: "%.1f MB", mb)
+        } else {
+            return String(format: "%.0f KB", kb)
+        }
     }
     
     // MARK: - Spent Notes Section
