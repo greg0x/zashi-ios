@@ -1131,9 +1131,11 @@ let package = Package(
         .target(
             name: "WalletBalances",
             dependencies: [
+                "DatabaseFiles",
                 "ExchangeRate",
                 "Generated",
                 "Models",
+                "PIRClient",
                 "SDKSynchronizer",
                 "UIComponents",
                 "UserPreferencesStorage",

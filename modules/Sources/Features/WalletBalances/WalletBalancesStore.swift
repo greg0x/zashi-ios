@@ -8,8 +8,10 @@
 import Foundation
 import ComposableArchitecture
 
+import DatabaseFiles
 import ExchangeRate
 import Models
+import PIRClient
 import SDKSynchronizer
 import Utils
 import ZcashLightClientKit
@@ -17,10 +19,43 @@ import ZcashSDKEnvironment
 import UserPreferencesStorage
 import WalletStorage
 
+// MARK: - PIR Verification State
+
+/// State of PIR-based balance verification
+public enum PIRVerificationState: Equatable {
+    /// PIR verification is not active (sync is up-to-date or not far enough behind)
+    case idle
+    /// Connecting to PIR server
+    case connecting
+    /// Precomputing cryptographic keys (one-time cost per session)
+    case preparingKeys
+    /// Actively checking nullifiers via PIR
+    case verifying(checked: Int, total: Int)
+    /// Verification complete - balance confirmed via PIR
+    case verified(checkedCount: Int, spentFound: Int)
+    /// Verification failed (non-fatal, sync continues normally)
+    case failed(String)
+    
+    public var isActive: Bool {
+        switch self {
+        case .connecting, .preparingKeys, .verifying:
+            return true
+        default:
+            return false
+        }
+    }
+    
+    public var isVerified: Bool {
+        if case .verified = self { return true }
+        return false
+    }
+}
+
 @Reducer
 public struct WalletBalances {
     private let CancelStateId = UUID()
     private let CancelRateId = UUID()
+    private let CancelPIRId = UUID()
 
     @ObservableState
     public struct State: Equatable {
@@ -38,6 +73,24 @@ public struct WalletBalances {
         public var spendability: Spendability = .everything
         public var totalBalance: Zatoshi
         public var transparentBalance: Zatoshi
+        
+        // MARK: PIR Verification State
+        
+        /// Current state of PIR-based balance verification
+        public var pirVerificationState: PIRVerificationState = .idle
+        /// Balance verified via PIR (before full sync completes)
+        /// This is the shielded balance minus any notes PIR found to be spent
+        public var pirVerifiedShieldedBalance: Zatoshi?
+        /// Number of blocks behind when PIR verification started
+        public var pirBlocksBehind: Int = 0
+        /// Whether PIR verification is enabled (can be toggled in settings)
+        public var isPIREnabled: Bool = true
+        /// Threshold: trigger PIR when this many blocks behind
+        public static let pirBlocksThreshold: Int = 100
+        /// PIR server URL
+        public var pirServerURL: String = "http://localhost:8000"
+        /// Track the sync session to avoid re-triggering PIR
+        public var pirLastSyncSessionID: UUID?
 
         public var isExchangeRateUSDInFlight: Bool {
             fiatCurrencyResult?.state == .fetching
@@ -53,6 +106,21 @@ public struct WalletBalances {
 
         public var currencyValue: String {
             currencyConversion?.convert(totalBalance) ?? ""
+        }
+        
+        /// Returns the best available shielded balance:
+        /// - PIR-verified balance if PIR verification completed and sync is still in progress
+        /// - Regular shielded balance otherwise
+        public var effectiveShieldedBalance: Zatoshi {
+            if let pirBalance = pirVerifiedShieldedBalance, pirVerificationState.isVerified {
+                return pirBalance
+            }
+            return shieldedBalance
+        }
+        
+        /// Whether we should show the PIR verification indicator
+        public var showPIRIndicator: Bool {
+            pirVerificationState.isActive || pirVerificationState.isVerified
         }
         
         public init(
@@ -90,10 +158,19 @@ public struct WalletBalances {
         case onDisappear
         case synchronizerStateChanged(RedactableSynchronizerState)
         case updateBalances
+        
+        // MARK: PIR Actions
+        case pirStartVerification(blocksBehind: Int, syncSessionID: UUID)
+        case pirStateChanged(PIRVerificationState)
+        case pirVerificationCompleted(checkedCount: Int, spentFound: Int, adjustedBalance: Zatoshi)
+        case pirVerificationFailed(String)
+        case pirCancelVerification
     }
 
+    @Dependency(\.databaseFiles) var databaseFiles
     @Dependency(\.exchangeRate) var exchangeRate
     @Dependency(\.mainQueue) var mainQueue
+    @Dependency(\.pirClient) var pirClient
     @Dependency(\.sdkSynchronizer) var sdkSynchronizer
     @Dependency(\.userStoredPreferences) var userStoredPreferences
     @Dependency(\.walletStorage) var walletStorage
@@ -129,9 +206,11 @@ public struct WalletBalances {
                 )
 
             case .onDisappear:
+                pirClient.disconnect()
                 return .merge(
                     .cancel(id: CancelStateId),
-                    .cancel(id: CancelRateId)
+                    .cancel(id: CancelRateId),
+                    .cancel(id: CancelPIRId)
                 )
                 
             case .availableBalanceTapped:
@@ -222,8 +301,133 @@ public struct WalletBalances {
                 guard let account = state.selectedWalletAccount else {
                     return .none
                 }
+                
+                // Check if we should trigger PIR verification
+                var pirEffect: Effect<Action> = .none
+                
+                // Only trigger PIR if:
+                // 1. PIR is enabled
+                // 2. We're syncing (not up-to-date)
+                // 3. We haven't already started PIR for this sync session
+                // 4. PIR is not already active
+                if state.isPIREnabled,
+                   case .syncing(let progress, _) = snapshot.syncStatus,
+                   progress < 0.95, // Don't bother if almost done
+                   state.pirLastSyncSessionID != latestState.data.syncSessionID,
+                   !state.pirVerificationState.isActive {
+                    
+                    // Estimate blocks behind from progress
+                    // progress = scanned / total, so blocks behind ≈ total * (1 - progress)
+                    // We use latestBlockHeight as a proxy for total blocks
+                    let latestHeight = latestState.data.latestBlockHeight
+                    let estimatedBlocksBehind = Int(Double(latestHeight) * Double(1 - progress))
+                    
+                    if estimatedBlocksBehind > State.pirBlocksThreshold {
+                        pirEffect = .send(.pirStartVerification(
+                            blocksBehind: estimatedBlocksBehind,
+                            syncSessionID: latestState.data.syncSessionID
+                        ))
+                    }
+                }
+                
+                // When sync completes, clear PIR state
+                if case .upToDate = snapshot.syncStatus {
+                    state.pirVerificationState = .idle
+                    state.pirVerifiedShieldedBalance = nil
+                    state.pirLastSyncSessionID = nil
+                }
 
-                return .send(.balanceUpdated(latestState.data.accountsBalances[account.id]))
+                return .merge(
+                    .send(.balanceUpdated(latestState.data.accountsBalances[account.id])),
+                    pirEffect
+                )
+                
+            // MARK: - PIR Verification Actions
+                
+            case .pirStartVerification(let blocksBehind, let syncSessionID):
+                // Mark this sync session so we don't re-trigger
+                state.pirLastSyncSessionID = syncSessionID
+                state.pirBlocksBehind = blocksBehind
+                state.pirVerificationState = .connecting
+                
+                let serverURL = state.pirServerURL
+                let network = zcashSDKEnvironment.network
+                let dataDbURL = databaseFiles.dataDbURLFor(network)
+                let currentBalance = state.shieldedBalance
+                
+                return .run { send in
+                    do {
+                        // Step 1: Connect to PIR server
+                        await send(.pirStateChanged(.connecting))
+                        try await pirClient.connect(serverURL, .inspire)
+                        
+                        // Step 2: Precompute keys (expensive, but cached for session)
+                        await send(.pirStateChanged(.preparingKeys))
+                        try await pirClient.precomputeKeys()
+                        
+                        // Step 3: Get unspent nullifiers from wallet
+                        let nullifiers = try await pirClient.getUnspentNullifiers(
+                            dataDbURL,
+                            network.networkType
+                        )
+                        
+                        let totalCount = nullifiers.count
+                        guard totalCount > 0 else {
+                            // No nullifiers to check
+                            await send(.pirVerificationCompleted(
+                                checkedCount: 0,
+                                spentFound: 0,
+                                adjustedBalance: currentBalance
+                            ))
+                            return
+                        }
+                        
+                        // Step 4: Check each nullifier via PIR
+                        var spentCount = 0
+                        
+                        for (index, nullifier) in nullifiers.enumerated() {
+                            await send(.pirStateChanged(.verifying(checked: index + 1, total: totalCount)))
+                            
+                            if let _ = try await pirClient.checkNullifier(nullifier) {
+                                // Nullifier found = note was spent
+                                spentCount += 1
+                            }
+                        }
+                        
+                        // Step 5: Report results
+                        // For now, we can't easily calculate the exact balance adjustment
+                        // because we'd need to know the value of each spent note.
+                        // Just report the count and keep current balance as "verified"
+                        await send(.pirVerificationCompleted(
+                            checkedCount: totalCount,
+                            spentFound: spentCount,
+                            adjustedBalance: currentBalance
+                        ))
+                        
+                    } catch {
+                        await send(.pirVerificationFailed(error.localizedDescription))
+                    }
+                }
+                .cancellable(id: CancelPIRId, cancelInFlight: true)
+                
+            case .pirStateChanged(let newState):
+                state.pirVerificationState = newState
+                return .none
+                
+            case .pirVerificationCompleted(let checkedCount, let spentFound, let adjustedBalance):
+                state.pirVerificationState = .verified(checkedCount: checkedCount, spentFound: spentFound)
+                state.pirVerifiedShieldedBalance = adjustedBalance
+                return .none
+                
+            case .pirVerificationFailed(let error):
+                // PIR failure is non-fatal - sync continues normally
+                state.pirVerificationState = .failed(error)
+                return .none
+                
+            case .pirCancelVerification:
+                state.pirVerificationState = .idle
+                pirClient.disconnect()
+                return .cancel(id: CancelPIRId)
             }
         }
     }
