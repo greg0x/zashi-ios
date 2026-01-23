@@ -452,17 +452,28 @@ public struct PIRVerificationView: View {
                 // Time comparison vs traditional sync
                 let traditionalMs = metrics.estimatedSyncTimeMs
                 let pirMs = metrics.totalMs
-                let timeMultiplier = traditionalMs > 0 ? Double(traditionalMs) / Double(max(1, pirMs)) : 0
                 
-                if timeMultiplier > 1 {
-                    HStack(spacing: 4) {
+                HStack(spacing: 4) {
+                    if traditionalMs > pirMs {
+                        let timeMultiplier = Double(traditionalMs) / Double(max(1, pirMs))
                         Image(systemName: "bolt.fill")
                             .foregroundColor(.green)
-                        Text("**\(String(format: "%.0f", timeMultiplier))x faster** than traditional sync (\(formatTime(traditionalMs)) vs \(formatTime(pirMs)))")
+                        Text("**\(String(format: "%.0f", timeMultiplier))x faster** than traditional sync (\(formatTime(traditionalMs)) → \(formatTime(pirMs)))")
+                            .zFont(size: 12, style: Design.Text.primary)
+                    } else if pirMs > traditionalMs {
+                        let timeMultiplier = Double(pirMs) / Double(max(1, traditionalMs))
+                        Image(systemName: "tortoise.fill")
+                            .foregroundColor(.orange)
+                        Text("**\(String(format: "%.1f", timeMultiplier))x slower** than traditional sync (\(formatTime(traditionalMs)) → \(formatTime(pirMs)))")
+                            .zFont(size: 12, style: Design.Text.primary)
+                    } else {
+                        Image(systemName: "equal.circle.fill")
+                            .foregroundColor(.gray)
+                        Text("Same speed as traditional sync")
                             .zFont(size: 12, style: Design.Text.primary)
                     }
-                    .padding(.top, 4)
                 }
+                .padding(.top, 4)
             }
             
             Divider()
@@ -494,31 +505,38 @@ public struct PIRVerificationView: View {
                     Spacer()
                     
                     if metrics.pirIsMoreEfficient {
-                        Text("✓ \(metrics.bandwidthSavingsFactor)x less data")
+                        Text("✓ \(metrics.bandwidthSavingsFactor)x less")
                             .zFont(.semiBold, size: 12, style: Design.Utility.SuccessGreen._700)
                     } else {
-                        Text("Traditional wins")
-                            .zFont(size: 12, style: Design.Text.tertiary)
+                        let inverseMultiplier = Double(metrics.totalPIRBytes) / Double(max(1, metrics.estimatedSyncBytes))
+                        Text("✗ \(String(format: "%.1f", inverseMultiplier))x more")
+                            .zFont(.semiBold, size: 12, style: Design.Utility.ErrorRed._700)
                     }
                 }
                 
                 // Scenario breakdown with multipliers
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Bandwidth savings by scenario:")
+                    Text("Bandwidth by scenario:")
                         .zFont(size: 10, style: Design.Text.tertiary)
                     HStack(spacing: 8) {
                         ForEach([TraditionalSyncEstimates.Scenario.oneDay, .oneWeek, .oneMonth], id: \.self) { scenario in
-                            let multiplier = Double(scenario.estimatedBytes) / Double(max(1, metrics.totalPIRBytes))
+                            let traditionalBytes = scenario.estimatedBytes
+                            let pirBytes = metrics.totalPIRBytes
                             VStack(spacing: 1) {
                                 Text(scenario.rawValue.replacingOccurrences(of: " offline", with: ""))
                                     .zFont(size: 9, style: Design.Text.tertiary)
                                 Text(scenario.description)
                                     .zFont(.medium, size: 10, style: Design.Text.primary)
-                                if multiplier > 1 {
+                                if traditionalBytes > pirBytes {
+                                    let multiplier = Double(traditionalBytes) / Double(max(1, pirBytes))
                                     Text("\(String(format: "%.0f", multiplier))x less")
                                         .zFont(.semiBold, size: 9, style: Design.Utility.SuccessGreen._700)
+                                } else if pirBytes > traditionalBytes {
+                                    let multiplier = Double(pirBytes) / Double(max(1, traditionalBytes))
+                                    Text("\(String(format: "%.1f", multiplier))x more")
+                                        .zFont(.semiBold, size: 9, style: Design.Utility.ErrorRed._700)
                                 } else {
-                                    Text("PIR bigger")
+                                    Text("Same")
                                         .zFont(size: 9, style: Design.Text.tertiary)
                                 }
                             }
