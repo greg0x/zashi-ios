@@ -230,7 +230,7 @@ public struct WalletBalancesView: View {
                 } else {
                     Text("PIR found \(spentFound) spent note(s)")
                         .font(.custom(FontFamily.Inter.medium.name, size: 14))
-                        .foregroundColor(Asset.Colors.error.color)
+                        .foregroundColor(Asset.Colors.ZDesign.errorRed500.color)
                 }
                 
             case .failed:
