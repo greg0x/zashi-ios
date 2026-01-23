@@ -186,6 +186,7 @@ public struct WalletBalances {
         case pirCancelVerification
         case pirSetEnabled(Bool)
         case pirSetServerURL(String)
+        case pirTriggerManually
     }
 
     @Dependency(\.databaseFiles) var databaseFiles
@@ -310,13 +311,8 @@ public struct WalletBalances {
                 return .none
 
             case .debugMenuStartup:
-                // Long-press on balance triggers PIR verification for testing
-                // This bypasses the normal "blocks behind" check
-                if state.isPIREnabled && !state.pirVerificationState.isActive {
-                    // Use a fresh sync session ID to allow re-triggering
-                    return .send(.pirStartVerification(blocksBehind: 999, syncSessionID: UUID()))
-                }
-                return .none
+                // Long-press on balance triggers PIR verification
+                return .send(.pirTriggerManually)
 
             case .synchronizerStateChanged(let latestState):
                 let snapshot = SyncStatusSnapshot.snapshotFor(state: latestState.data.syncStatus)
@@ -469,6 +465,19 @@ public struct WalletBalances {
                 state.pirServerURL = url
                 UserDefaults.standard.set(url, forKey: PIRUserDefaultsKeys.serverURL)
                 return .none
+                
+            case .pirTriggerManually:
+                // Manual trigger for testing - bypasses the "blocks behind" check
+                // Can be called from visible UI elements in any build
+                guard state.isPIREnabled else {
+                    return .none
+                }
+                guard !state.pirVerificationState.isActive else {
+                    // Already running, don't start another
+                    return .none
+                }
+                // Use a fresh UUID to allow re-triggering even in the same sync session
+                return .send(.pirStartVerification(blocksBehind: 0, syncSessionID: UUID()))
             }
         }
     }
