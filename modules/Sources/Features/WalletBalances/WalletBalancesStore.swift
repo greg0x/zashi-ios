@@ -95,13 +95,9 @@ public struct WalletBalances {
         public var pirBlocksBehind: Int = 0
         /// Whether PIR verification is enabled (can be toggled in settings)
         public var isPIREnabled: Bool = true
-        /// Threshold: trigger PIR when this many blocks behind
-        #if SECANT_DISTRIB
-        public static let pirBlocksThreshold: Int = 100
-        #else
-        // Lower threshold in debug builds for easier testing
-        public static let pirBlocksThreshold: Int = 10
-        #endif
+        /// Threshold: trigger PIR automatically when this many blocks behind
+        /// Set relatively low to make testing easier; can increase for production
+        public static let pirBlocksThreshold: Int = 50
         /// PIR server URL
         public var pirServerURL: String = "http://localhost:8000"
         /// Track the sync session to avoid re-triggering PIR
@@ -314,14 +310,12 @@ public struct WalletBalances {
                 return .none
 
             case .debugMenuStartup:
-                // In debug builds, long-press on balance triggers PIR verification for testing
+                // Long-press on balance triggers PIR verification for testing
                 // This bypasses the normal "blocks behind" check
-                #if !SECANT_DISTRIB
                 if state.isPIREnabled && !state.pirVerificationState.isActive {
-                    // Use a fake sync session ID to allow re-triggering
+                    // Use a fresh sync session ID to allow re-triggering
                     return .send(.pirStartVerification(blocksBehind: 999, syncSessionID: UUID()))
                 }
-                #endif
                 return .none
 
             case .synchronizerStateChanged(let latestState):
