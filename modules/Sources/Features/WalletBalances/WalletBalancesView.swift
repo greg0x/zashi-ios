@@ -53,7 +53,8 @@ public struct WalletBalancesView: View {
                         .foregroundColor(Asset.Colors.primary.color)
                         .padding(.top, 12)
                         .padding(.bottom, 30)
-                } else if store.showPIRIndicator && !shortened {
+                } else if store.isPIREnabled && !shortened {
+                    // PIR status bar - always visible when PIR is enabled for testing
                     pirVerificationStatus()
                         .padding(.top, 12)
                         .padding(.bottom, 30)
@@ -189,52 +190,126 @@ public struct WalletBalancesView: View {
         }
     }
     
-    // MARK: - PIR Verification Status
+    // MARK: - PIR Verification Status Bar
     
+    /// PIR status bar - always visible when PIR is enabled, tappable to trigger verification
     @ViewBuilder private func pirVerificationStatus() -> some View {
-        HStack(spacing: 8) {
-            switch store.pirVerificationState {
-            case .idle:
-                EmptyView()
-                
-            case .connecting:
-                ProgressView()
-                    .scaleEffect(0.7)
-                Text("Connecting to PIR server...")
-                    .font(.custom(FontFamily.Inter.regular.name, size: 14))
-                    .foregroundColor(Asset.Colors.shade55.color)
-                
-            case .preparingKeys:
-                ProgressView()
-                    .scaleEffect(0.7)
-                Text("Preparing verification keys...")
-                    .font(.custom(FontFamily.Inter.regular.name, size: 14))
-                    .foregroundColor(Asset.Colors.shade55.color)
-                
-            case .verifying(let checked, let total):
-                ProgressView()
-                    .scaleEffect(0.7)
-                Text("Verifying notes (\(checked)/\(total))...")
-                    .font(.custom(FontFamily.Inter.regular.name, size: 14))
-                    .foregroundColor(Asset.Colors.shade55.color)
-                
-            case .verified(let checkedCount, let spentFound):
-                Image(systemName: "checkmark.shield.fill")
-                    .foregroundColor(Asset.Colors.primary.color)
-                if spentFound == 0 {
-                    Text("Balance verified via PIR (\(checkedCount) notes)")
-                        .font(.custom(FontFamily.Inter.medium.name, size: 14))
-                        .foregroundColor(Asset.Colors.primary.color)
-                } else {
-                    Text("PIR found \(spentFound) spent note(s)")
-                        .font(.custom(FontFamily.Inter.medium.name, size: 14))
-                        .foregroundColor(Asset.Colors.ZDesign.errorRed500.color)
-                }
-                
-            case .failed:
-                // Don't show failure - it's non-fatal, sync continues normally
-                EmptyView()
+        Button {
+            store.send(.pirTriggerManually)
+        } label: {
+            HStack(spacing: 8) {
+                pirStatusIcon()
+                pirStatusText()
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(pirStatusBackground())
+            .cornerRadius(20)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(pirStatusBorderColor(), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(store.pirVerificationState.isActive)
+    }
+    
+    @ViewBuilder private func pirStatusIcon() -> some View {
+        switch store.pirVerificationState {
+        case .idle:
+            Image(systemName: "shield.lefthalf.filled")
+                .foregroundColor(Asset.Colors.shade55.color)
+        case .connecting, .preparingKeys, .verifying:
+            ProgressView()
+                .scaleEffect(0.7)
+        case .verified(_, let spentFound):
+            if spentFound == 0 {
+                Image(systemName: "checkmark.shield.fill")
+                    .foregroundColor(Design.Utility.SuccessGreen._600.color(colorScheme))
+            } else {
+                Image(systemName: "exclamationmark.shield.fill")
+                    .foregroundColor(Asset.Colors.ZDesign.errorRed500.color)
+            }
+        case .failed:
+            Image(systemName: "xmark.shield.fill")
+                .foregroundColor(Asset.Colors.shade55.color)
+        }
+    }
+    
+    @ViewBuilder private func pirStatusText() -> some View {
+        switch store.pirVerificationState {
+        case .idle:
+            VStack(alignment: .leading, spacing: 2) {
+                Text("PIR Preview")
+                    .font(.custom(FontFamily.Inter.semiBold.name, size: 12))
+                    .foregroundColor(Asset.Colors.shade55.color)
+                Text("Tap to verify balance")
+                    .font(.custom(FontFamily.Inter.regular.name, size: 11))
+                    .foregroundColor(Asset.Colors.shade55.color.opacity(0.8))
+            }
+        case .connecting:
+            Text("Connecting...")
+                .font(.custom(FontFamily.Inter.regular.name, size: 12))
+                .foregroundColor(Asset.Colors.shade55.color)
+        case .preparingKeys:
+            Text("Preparing keys...")
+                .font(.custom(FontFamily.Inter.regular.name, size: 12))
+                .foregroundColor(Asset.Colors.shade55.color)
+        case .verifying(let checked, let total):
+            Text("Verifying \(checked)/\(total)")
+                .font(.custom(FontFamily.Inter.regular.name, size: 12))
+                .foregroundColor(Asset.Colors.shade55.color)
+        case .verified(let checkedCount, let spentFound):
+            if spentFound == 0 {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Verified")
+                        .font(.custom(FontFamily.Inter.semiBold.name, size: 12))
+                        .foregroundColor(Design.Utility.SuccessGreen._600.color(colorScheme))
+                    Text("\(checkedCount) notes checked")
+                        .font(.custom(FontFamily.Inter.regular.name, size: 11))
+                        .foregroundColor(Asset.Colors.shade55.color)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Found \(spentFound) spent")
+                        .font(.custom(FontFamily.Inter.semiBold.name, size: 12))
+                        .foregroundColor(Asset.Colors.ZDesign.errorRed500.color)
+                    Text("Sync to update")
+                        .font(.custom(FontFamily.Inter.regular.name, size: 11))
+                        .foregroundColor(Asset.Colors.shade55.color)
+                }
+            }
+        case .failed(let error):
+            VStack(alignment: .leading, spacing: 2) {
+                Text("PIR unavailable")
+                    .font(.custom(FontFamily.Inter.semiBold.name, size: 12))
+                    .foregroundColor(Asset.Colors.shade55.color)
+                Text(error.prefix(30) + (error.count > 30 ? "..." : ""))
+                    .font(.custom(FontFamily.Inter.regular.name, size: 10))
+                    .foregroundColor(Asset.Colors.shade55.color.opacity(0.8))
+            }
+        }
+    }
+    
+    private func pirStatusBackground() -> Color {
+        switch store.pirVerificationState {
+        case .verified(_, let spentFound) where spentFound == 0:
+            return Design.Utility.SuccessGreen._50.color(colorScheme).opacity(0.5)
+        case .verified:
+            return Asset.Colors.ZDesign.errorRed500.color.opacity(0.1)
+        default:
+            return Design.Surfaces.bgSecondary.color(colorScheme).opacity(0.8)
+        }
+    }
+    
+    private func pirStatusBorderColor() -> Color {
+        switch store.pirVerificationState {
+        case .verified(_, let spentFound) where spentFound == 0:
+            return Design.Utility.SuccessGreen._600.color(colorScheme).opacity(0.3)
+        case .verified:
+            return Asset.Colors.ZDesign.errorRed500.color.opacity(0.3)
+        default:
+            return Design.Surfaces.strokePrimary.color(colorScheme).opacity(0.5)
         }
     }
 }
