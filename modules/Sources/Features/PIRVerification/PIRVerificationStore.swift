@@ -49,6 +49,78 @@ public enum TestNullifiers {
 
 // MARK: - Timing Metrics
 
+// MARK: - Traditional Sync Comparison Constants
+
+/// Constants for computing traditional sync costs
+public enum TraditionalSyncEstimates {
+    /// Average nullifiers per block (based on mainnet data: ~52M nullifiers over ~2.78M blocks)
+    public static let nullifiersPerBlock: Int = 20
+    
+    /// Bytes per nullifier (32-byte hash)
+    public static let bytesPerNullifier: Int = 32
+    
+    /// Blocks per day (~75 second block time)
+    public static let blocksPerDay: Int = 1_152
+    
+    /// First block with nullifiers on mainnet
+    public static let firstNullifierBlock: Int = 420_000
+    
+    /// Assumed download + processing speed (bytes per millisecond)
+    /// 10 MB/s = 10,000 bytes/ms
+    public static let bytesPerMs: Int = 10_000
+    
+    /// Compute estimated bytes to download for incremental sync
+    /// - Parameter blocksBehind: Number of blocks behind (current - last synced)
+    /// - Returns: Estimated bytes for traditional nullifier download
+    public static func estimatedBytes(blocksBehind: Int) -> Int {
+        blocksBehind * nullifiersPerBlock * bytesPerNullifier
+    }
+    
+    /// Compute estimated time for incremental sync in milliseconds
+    /// - Parameter blocksBehind: Number of blocks behind
+    /// - Returns: Estimated milliseconds for traditional sync
+    public static func estimatedMs(blocksBehind: Int) -> Int {
+        let bytes = estimatedBytes(blocksBehind: blocksBehind)
+        return max(1000, bytes / bytesPerMs) // At least 1 second
+    }
+    
+    /// Pre-computed scenarios for display
+    public enum Scenario: String, CaseIterable {
+        case oneDay = "1 day offline"
+        case oneWeek = "1 week offline"
+        case oneMonth = "1 month offline"
+        case oldestNote = "Note from 2018"
+        
+        public var blocksBehind: Int {
+            switch self {
+            case .oneDay: return blocksPerDay
+            case .oneWeek: return blocksPerDay * 7
+            case .oneMonth: return blocksPerDay * 30
+            case .oldestNote: return 2_780_000 // ~3.2M - 420k
+            }
+        }
+        
+        public var estimatedBytes: Int {
+            TraditionalSyncEstimates.estimatedBytes(blocksBehind: blocksBehind)
+        }
+        
+        public var estimatedMs: Int {
+            TraditionalSyncEstimates.estimatedMs(blocksBehind: blocksBehind)
+        }
+        
+        public var description: String {
+            let mb = Double(estimatedBytes) / 1_000_000
+            if mb < 1 {
+                return String(format: "%.0f KB", Double(estimatedBytes) / 1_000)
+            } else if mb < 1000 {
+                return String(format: "%.1f MB", mb)
+            } else {
+                return String(format: "%.2f GB", mb / 1_000)
+            }
+        }
+    }
+}
+
 /// Timing breakdown for PIR queries (like password demo pattern)
 public struct QueryMetrics: Equatable {
     /// Time to generate query (client-side cryptography)
@@ -69,6 +141,8 @@ public struct QueryMetrics: Equatable {
     /// Number of nullifiers checked
     public let nullifiersChecked: Int
     
+    /// Blocks behind for comparison context
+    public let blocksBehind: Int
     /// Estimated time for traditional sync (for comparison)
     public let estimatedSyncTimeMs: Int
     /// Estimated bytes for traditional sync
@@ -84,9 +158,19 @@ public struct QueryMetrics: Equatable {
         return estimatedSyncBytes / downloadedBytes
     }
     
+    /// Total PIR data transferred (upload + download)
+    public var totalPIRBytes: Int {
+        (uploadedBytes + downloadedBytes) * nullifiersChecked
+    }
+    
     public var perQueryMs: Double {
         guard nullifiersChecked > 0 else { return 0 }
         return Double(totalMs) / Double(nullifiersChecked)
+    }
+    
+    /// Whether PIR is more efficient than traditional sync for this scenario
+    public var pirIsMoreEfficient: Bool {
+        totalPIRBytes < estimatedSyncBytes
     }
     
     public init(
@@ -98,8 +182,9 @@ public struct QueryMetrics: Equatable {
         uploadedBytes: Int = 0,
         downloadedBytes: Int = 0,
         nullifiersChecked: Int = 0,
-        estimatedSyncTimeMs: Int = 720_000, // 12 min default
-        estimatedSyncBytes: Int = 450_000_000 // 450 MB default
+        blocksBehind: Int = 0,
+        estimatedSyncTimeMs: Int? = nil,
+        estimatedSyncBytes: Int? = nil
     ) {
         self.queryGenerationMs = queryGenerationMs
         self.networkMs = networkMs
@@ -109,8 +194,10 @@ public struct QueryMetrics: Equatable {
         self.uploadedBytes = uploadedBytes
         self.downloadedBytes = downloadedBytes
         self.nullifiersChecked = nullifiersChecked
-        self.estimatedSyncTimeMs = estimatedSyncTimeMs
-        self.estimatedSyncBytes = estimatedSyncBytes
+        self.blocksBehind = blocksBehind
+        // Use provided values or compute from blocksBehind
+        self.estimatedSyncTimeMs = estimatedSyncTimeMs ?? TraditionalSyncEstimates.estimatedMs(blocksBehind: blocksBehind)
+        self.estimatedSyncBytes = estimatedSyncBytes ?? TraditionalSyncEstimates.estimatedBytes(blocksBehind: blocksBehind)
     }
 }
 
@@ -137,20 +224,6 @@ public struct ServerInfo: Equatable {
         self.keywordMethod = keywordMethod
         self.lweDim = lweDim
         self.ringDim = ringDim
-    }
-    
-    /// Estimated bytes for traditional sync (downloading all nullifiers)
-    /// Each nullifier is 32 bytes
-    public var estimatedTraditionalSyncBytes: Int {
-        numNullifiers * 32
-    }
-    
-    /// Estimated time for traditional sync in milliseconds
-    /// Assumes ~10 MB/s effective throughput (download + processing)
-    public var estimatedTraditionalSyncMs: Int {
-        let bytes = estimatedTraditionalSyncBytes
-        let bytesPerMs = 10_000 // 10 MB/s = 10,000 bytes/ms
-        return max(1000, bytes / bytesPerMs) // At least 1 second
     }
     
     /// Fetch server info from /health endpoint
@@ -549,7 +622,8 @@ public struct PIRVerification {
                         // Check the nullifier with timing
                         let result = try await pirClient.checkNullifierWithTiming(nullifier)
                         
-                        // Update metrics with real estimates from server
+                        // Update metrics - use "oldest note" scenario for worst-case comparison
+                        // This assumes note is from block 420k, ~2.78M blocks behind
                         let metrics = QueryMetrics(
                             queryGenerationMs: result.timing.queryGenerationMs,
                             networkMs: result.timing.networkMs,
@@ -559,8 +633,7 @@ public struct PIRVerification {
                             uploadedBytes: result.timing.uploadBytes,
                             downloadedBytes: result.timing.downloadBytes,
                             nullifiersChecked: 1,
-                            estimatedSyncTimeMs: info?.estimatedTraditionalSyncMs ?? 720_000,
-                            estimatedSyncBytes: info?.estimatedTraditionalSyncBytes ?? 1_600_000_000
+                            blocksBehind: TraditionalSyncEstimates.Scenario.oldestNote.blocksBehind
                         )
                         await send(.updateMetrics(metrics))
                         await send(.testCompleted(testType, result.spentInfo))
@@ -678,7 +751,8 @@ public struct PIRVerification {
                         let verificationEnd = DispatchTime.now()
                         let totalMs = Int((verificationEnd.uptimeNanoseconds - verificationStart.uptimeNanoseconds) / 1_000_000)
                         
-                        // Update metrics with real estimates from server
+                        // Update metrics - use "oldest note" scenario for comparison
+                        // Real implementation could track actual note ages
                         let metrics = QueryMetrics(
                             queryGenerationMs: totalQueryGenMs,
                             networkMs: totalNetworkMs,
@@ -688,8 +762,7 @@ public struct PIRVerification {
                             uploadedBytes: totalUploadBytes,
                             downloadedBytes: totalDownloadBytes,
                             nullifiersChecked: totalNotes,
-                            estimatedSyncTimeMs: serverInfo?.estimatedTraditionalSyncMs ?? 720_000,
-                            estimatedSyncBytes: serverInfo?.estimatedTraditionalSyncBytes ?? 1_600_000_000
+                            blocksBehind: TraditionalSyncEstimates.Scenario.oldestNote.blocksBehind
                         )
                         await send(.updateMetrics(metrics))
                         
