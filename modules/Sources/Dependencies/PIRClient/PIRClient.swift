@@ -167,43 +167,23 @@ extension PIRClient: DependencyKey {
                     throw PIRError.clientNotInitialized
                 }
                 
-                let totalStart = DispatchTime.now()
-                
-                // Use the new FFI method that returns actual byte counts
+                // Use the FFI method that returns actual measurements
                 let result = try await client.checkNullifierWithStats(nullifier)
                 
-                let totalEnd = DispatchTime.now()
-                let totalMs = Int((totalEnd.uptimeNanoseconds - totalStart.uptimeNanoseconds) / 1_000_000)
-                
-                // Use actual bytes from FFI, estimate timing breakdown
-                let uploadBytes = result.stats.uploadBytes
-                let downloadBytes = result.stats.downloadBytes
-                let serverMs = Int(result.stats.serverTimeMs ?? 50)
-                
-                // Estimate other timings based on protocol
-                let (queryGenMs, decryptMs): (Int, Int)
-                switch currentProtocol {
-                case .ypir:
-                    queryGenMs = 10
-                    decryptMs = 50
-                case .inspire:
-                    queryGenMs = 600
-                    decryptMs = 14
-                }
-                
-                // Network time is remainder after local processing
-                let estimatedNetworkMs = max(0, totalMs - queryGenMs - serverMs - decryptMs)
+                // All timing and byte data comes from actual Rust measurements
+                let stats = result.stats
+                let totalMs = Int(stats.queryGenMs + stats.networkMs + stats.serverMs + stats.decryptMs)
                 
                 return PIRCheckResult(
                     spentInfo: result.spentInfo,
                     timing: PIRQueryTiming(
-                        queryGenerationMs: queryGenMs,
-                        networkMs: estimatedNetworkMs,
-                        serverProcessingMs: serverMs,
-                        decryptionMs: decryptMs,
+                        queryGenerationMs: Int(stats.queryGenMs),
+                        networkMs: Int(stats.networkMs),
+                        serverProcessingMs: Int(stats.serverMs),
+                        decryptionMs: Int(stats.decryptMs),
                         totalMs: totalMs,
-                        uploadBytes: uploadBytes,
-                        downloadBytes: downloadBytes
+                        uploadBytes: stats.uploadBytes,
+                        downloadBytes: stats.downloadBytes
                     )
                 )
             }
