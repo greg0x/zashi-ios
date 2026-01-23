@@ -55,6 +55,10 @@ public struct WalletBalancesView: View {
                         .foregroundColor(Asset.Colors.primary.color)
                         .padding(.top, 12)
                         .padding(.bottom, 30)
+                } else if store.showPIRIndicator && !shortened {
+                    pirVerificationStatus()
+                        .padding(.top, 12)
+                        .padding(.bottom, 30)
                 } else if store.spendability != .everything && !shortened {
                     Button {
                         store.send(.availableBalanceTapped)
@@ -183,6 +187,55 @@ public struct WalletBalancesView: View {
                     .padding(.top, 10)
                     .padding(.vertical, 5)
                 }
+            }
+        }
+    }
+    
+    // MARK: - PIR Verification Status
+    
+    @ViewBuilder private func pirVerificationStatus() -> some View {
+        HStack(spacing: 8) {
+            switch store.pirVerificationState {
+            case .idle:
+                EmptyView()
+                
+            case .connecting:
+                ProgressView()
+                    .scaleEffect(0.7)
+                Text("Connecting to PIR server...")
+                    .font(.custom(FontFamily.Inter.regular.name, size: 14))
+                    .foregroundColor(Asset.Colors.shade55.color)
+                
+            case .preparingKeys:
+                ProgressView()
+                    .scaleEffect(0.7)
+                Text("Preparing verification keys...")
+                    .font(.custom(FontFamily.Inter.regular.name, size: 14))
+                    .foregroundColor(Asset.Colors.shade55.color)
+                
+            case .verifying(let checked, let total):
+                ProgressView()
+                    .scaleEffect(0.7)
+                Text("Verifying notes (\(checked)/\(total))...")
+                    .font(.custom(FontFamily.Inter.regular.name, size: 14))
+                    .foregroundColor(Asset.Colors.shade55.color)
+                
+            case .verified(let checkedCount, let spentFound):
+                Image(systemName: "checkmark.shield.fill")
+                    .foregroundColor(Asset.Colors.primary.color)
+                if spentFound == 0 {
+                    Text("Balance verified via PIR (\(checkedCount) notes)")
+                        .font(.custom(FontFamily.Inter.medium.name, size: 14))
+                        .foregroundColor(Asset.Colors.primary.color)
+                } else {
+                    Text("PIR found \(spentFound) spent note(s)")
+                        .font(.custom(FontFamily.Inter.medium.name, size: 14))
+                        .foregroundColor(Asset.Colors.error.color)
+                }
+                
+            case .failed:
+                // Don't show failure - it's non-fatal, sync continues normally
+                EmptyView()
             }
         }
     }
