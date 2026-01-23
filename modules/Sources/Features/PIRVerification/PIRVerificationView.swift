@@ -434,20 +434,35 @@ public struct PIRVerificationView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader(title: "📊 Performance Metrics")
             
-            // Timing breakdown
+            // Timing breakdown with percentages
             VStack(alignment: .leading, spacing: 8) {
                 Text("Timing Breakdown")
                     .zFont(.medium, size: 14, style: Design.Text.tertiary)
                 
                 HStack(spacing: 8) {
-                    timingColumn("Query Gen", "\(metrics.queryGenerationMs)ms")
-                    timingColumn("Network", "\(metrics.networkMs)ms")
-                    timingColumn("Server", "\(metrics.serverProcessingMs)ms")
-                    timingColumn("Decrypt", "\(metrics.decryptionMs)ms")
+                    timingColumn("Query Gen", "\(metrics.queryGenerationMs)ms", pct: timingPct(metrics.queryGenerationMs, total: metrics.totalMs))
+                    timingColumn("Network", "\(metrics.networkMs)ms", pct: timingPct(metrics.networkMs, total: metrics.totalMs))
+                    timingColumn("Server", "\(metrics.serverProcessingMs)ms", pct: timingPct(metrics.serverProcessingMs, total: metrics.totalMs))
+                    timingColumn("Decrypt", "\(metrics.decryptionMs)ms", pct: timingPct(metrics.decryptionMs, total: metrics.totalMs))
                 }
                 
                 Text("Total: \(metrics.totalMs)ms for \(metrics.nullifiersChecked) nullifiers (\(String(format: "%.0f", metrics.perQueryMs))ms/query)")
                     .zFont(size: 12, style: Design.Text.tertiary)
+                
+                // Time comparison vs traditional sync
+                let traditionalMs = metrics.estimatedSyncTimeMs
+                let pirMs = metrics.totalMs
+                let timeMultiplier = traditionalMs > 0 ? Double(traditionalMs) / Double(max(1, pirMs)) : 0
+                
+                if timeMultiplier > 1 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bolt.fill")
+                            .foregroundColor(.green)
+                        Text("**\(String(format: "%.0f", timeMultiplier))x faster** than traditional sync (\(formatTime(traditionalMs)) vs \(formatTime(pirMs)))")
+                            .zFont(size: 12, style: Design.Text.primary)
+                    }
+                    .padding(.top, 4)
+                }
             }
             
             Divider()
@@ -457,7 +472,7 @@ public struct PIRVerificationView: View {
                 Text("vs Traditional Sync (oldest note scenario):")
                     .zFont(.medium, size: 14, style: Design.Text.tertiary)
                 
-                // Show the comparison
+                // Bandwidth comparison
                 HStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Traditional")
@@ -479,7 +494,7 @@ public struct PIRVerificationView: View {
                     Spacer()
                     
                     if metrics.pirIsMoreEfficient {
-                        Text("✓ \(metrics.bandwidthSavingsFactor)x less")
+                        Text("✓ \(metrics.bandwidthSavingsFactor)x less data")
                             .zFont(.semiBold, size: 12, style: Design.Utility.SuccessGreen._700)
                     } else {
                         Text("Traditional wins")
@@ -487,18 +502,27 @@ public struct PIRVerificationView: View {
                     }
                 }
                 
-                // Scenario breakdown
+                // Scenario breakdown with multipliers
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Traditional sync by scenario:")
+                    Text("Bandwidth savings by scenario:")
                         .zFont(size: 10, style: Design.Text.tertiary)
-                    HStack(spacing: 12) {
+                    HStack(spacing: 8) {
                         ForEach([TraditionalSyncEstimates.Scenario.oneDay, .oneWeek, .oneMonth], id: \.self) { scenario in
+                            let multiplier = Double(scenario.estimatedBytes) / Double(max(1, metrics.totalPIRBytes))
                             VStack(spacing: 1) {
                                 Text(scenario.rawValue.replacingOccurrences(of: " offline", with: ""))
                                     .zFont(size: 9, style: Design.Text.tertiary)
                                 Text(scenario.description)
                                     .zFont(.medium, size: 10, style: Design.Text.primary)
+                                if multiplier > 1 {
+                                    Text("\(String(format: "%.0f", multiplier))x less")
+                                        .zFont(.semiBold, size: 9, style: Design.Utility.SuccessGreen._700)
+                                } else {
+                                    Text("PIR bigger")
+                                        .zFont(size: 9, style: Design.Text.tertiary)
+                                }
                             }
+                            .frame(maxWidth: .infinity)
                         }
                     }
                 }
@@ -522,12 +546,16 @@ public struct PIRVerificationView: View {
     }
     
     @ViewBuilder
-    private func timingColumn(_ label: String, _ value: String) -> some View {
+    private func timingColumn(_ label: String, _ value: String, pct: Int? = nil) -> some View {
         VStack(spacing: 4) {
             Text(label)
                 .zFont(size: 10, style: Design.Text.tertiary)
             Text(value)
                 .zFont(.medium, size: 14, style: Design.Text.primary)
+            if let pct = pct {
+                Text("\(pct)%")
+                    .zFont(size: 9, style: Design.Text.tertiary)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
@@ -535,6 +563,25 @@ public struct PIRVerificationView: View {
             RoundedRectangle(cornerRadius: 6)
                 .fill(Design.Surfaces.bgTertiary.color(colorScheme))
         )
+    }
+    
+    /// Calculate percentage of total
+    private func timingPct(_ value: Int, total: Int) -> Int {
+        guard total > 0 else { return 0 }
+        return Int(round(Double(value) / Double(total) * 100))
+    }
+    
+    /// Format milliseconds into human-readable time
+    private func formatTime(_ ms: Int) -> String {
+        if ms < 1000 {
+            return "\(ms)ms"
+        } else if ms < 60_000 {
+            return String(format: "%.1fs", Double(ms) / 1000)
+        } else {
+            let minutes = ms / 60_000
+            let seconds = (ms % 60_000) / 1000
+            return "\(minutes)m \(seconds)s"
+        }
     }
     
     /// Format bytes into human-readable string (KB, MB, GB)
