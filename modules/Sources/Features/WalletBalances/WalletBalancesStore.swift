@@ -96,7 +96,12 @@ public struct WalletBalances {
         /// Whether PIR verification is enabled (can be toggled in settings)
         public var isPIREnabled: Bool = true
         /// Threshold: trigger PIR when this many blocks behind
+        #if SECANT_DISTRIB
         public static let pirBlocksThreshold: Int = 100
+        #else
+        // Lower threshold in debug builds for easier testing
+        public static let pirBlocksThreshold: Int = 10
+        #endif
         /// PIR server URL
         public var pirServerURL: String = "http://localhost:8000"
         /// Track the sync session to avoid re-triggering PIR
@@ -183,6 +188,8 @@ public struct WalletBalances {
         case pirVerificationCompleted(checkedCount: Int, spentFound: Int, adjustedBalance: Zatoshi)
         case pirVerificationFailed(String)
         case pirCancelVerification
+        case pirSetEnabled(Bool)
+        case pirSetServerURL(String)
     }
 
     @Dependency(\.databaseFiles) var databaseFiles
@@ -307,6 +314,14 @@ public struct WalletBalances {
                 return .none
 
             case .debugMenuStartup:
+                // In debug builds, long-press on balance triggers PIR verification for testing
+                // This bypasses the normal "blocks behind" check
+                #if !SECANT_DISTRIB
+                if state.isPIREnabled && !state.pirVerificationState.isActive {
+                    // Use a fake sync session ID to allow re-triggering
+                    return .send(.pirStartVerification(blocksBehind: 999, syncSessionID: UUID()))
+                }
+                #endif
                 return .none
 
             case .synchronizerStateChanged(let latestState):
@@ -446,6 +461,20 @@ public struct WalletBalances {
                 state.pirVerificationState = .idle
                 pirClient.disconnect()
                 return .cancel(id: CancelPIRId)
+                
+            case .pirSetEnabled(let enabled):
+                state.isPIREnabled = enabled
+                UserDefaults.standard.set(enabled, forKey: PIRUserDefaultsKeys.balanceVerificationEnabled)
+                // If disabling, cancel any in-progress verification
+                if !enabled && state.pirVerificationState.isActive {
+                    return .send(.pirCancelVerification)
+                }
+                return .none
+                
+            case .pirSetServerURL(let url):
+                state.pirServerURL = url
+                UserDefaults.standard.set(url, forKey: PIRUserDefaultsKeys.serverURL)
+                return .none
             }
         }
     }
