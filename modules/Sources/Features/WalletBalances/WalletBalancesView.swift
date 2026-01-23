@@ -53,11 +53,11 @@ public struct WalletBalancesView: View {
                         .foregroundColor(Asset.Colors.primary.color)
                         .padding(.top, 12)
                         .padding(.bottom, 30)
-                } else if store.isPIREnabled && !shortened {
+                } else if store.isPIREnabled {
                     // PIR status bar - always visible when PIR is enabled for testing
                     pirVerificationStatus()
-                        .padding(.top, 12)
-                        .padding(.bottom, 30)
+                        .padding(.top, shortened ? 8 : 12)
+                        .padding(.bottom, shortened ? 8 : 30)
                 } else if store.spendability != .everything && !shortened {
                     Button {
                         store.send(.availableBalanceTapped)
