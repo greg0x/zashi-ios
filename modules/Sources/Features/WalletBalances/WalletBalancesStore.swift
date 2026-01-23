@@ -19,6 +19,16 @@ import ZcashSDKEnvironment
 import UserPreferencesStorage
 import WalletStorage
 
+// MARK: - PIR User Defaults Keys
+
+/// Keys for PIR settings in UserDefaults (shared with PIRVerification feature)
+public enum PIRUserDefaultsKeys {
+    /// PIR server URL (shared with PIRVerification)
+    public static let serverURL = "pir.serverURL"
+    /// Whether automatic PIR balance verification is enabled
+    public static let balanceVerificationEnabled = "pir.balanceVerificationEnabled"
+}
+
 // MARK: - PIR Verification State
 
 /// State of PIR-based balance verification
@@ -145,6 +155,14 @@ public struct WalletBalances {
             self.shieldedWithPendingBalance = shieldedWithPendingBalance
             self.totalBalance = totalBalance
             self.transparentBalance = transparentBalance
+            
+            // Load PIR settings from UserDefaults
+            let defaults = UserDefaults.standard
+            if let savedURL = defaults.string(forKey: PIRUserDefaultsKeys.serverURL), !savedURL.isEmpty {
+                self.pirServerURL = savedURL
+            }
+            // Default to enabled if not set (opt-out model)
+            self.isPIREnabled = defaults.object(forKey: PIRUserDefaultsKeys.balanceVerificationEnabled) as? Bool ?? true
         }
     }
     
