@@ -15,8 +15,6 @@ import ZcashSDKEnvironment
 // MARK: - User Defaults Keys
 
 private enum PIRUserDefaultsKeys {
-    static let serverURL = "pir.serverURL"
-    static let selectedProtocol = "pir.selectedProtocol"
     static let showTechnicalDetails = "pir.showTechnicalDetails"
 }
 
@@ -347,8 +345,7 @@ public struct PIRVerification {
         // MARK: State Properties
         
         // Configuration (loaded from UserDefaults)
-        public var selectedProtocol: PIRProtocolSelection = .inspire
-        public var serverURL: String = "http://localhost:8000"
+        // Note: Server URL is no longer configurable - PIR uses lightwalletd connection
         public var showTechnicalDetails: Bool = false
         
         // UI state
@@ -380,16 +377,6 @@ public struct PIRVerification {
         public init() {
             // Load persisted settings
             let defaults = UserDefaults.standard
-            
-            if let savedURL = defaults.string(forKey: PIRUserDefaultsKeys.serverURL), !savedURL.isEmpty {
-                self.serverURL = savedURL
-            }
-            
-            if let savedProtocol = defaults.string(forKey: PIRUserDefaultsKeys.selectedProtocol),
-               let proto = PIRProtocolSelection(rawValue: savedProtocol) {
-                self.selectedProtocol = proto
-            }
-            
             self.showTechnicalDetails = defaults.bool(forKey: PIRUserDefaultsKeys.showTechnicalDetails)
         }
         
@@ -397,8 +384,6 @@ public struct PIRVerification {
         
         public func saveToUserDefaults() {
             let defaults = UserDefaults.standard
-            defaults.set(serverURL, forKey: PIRUserDefaultsKeys.serverURL)
-            defaults.set(selectedProtocol.rawValue, forKey: PIRUserDefaultsKeys.selectedProtocol)
             defaults.set(showTechnicalDetails, forKey: PIRUserDefaultsKeys.showTechnicalDetails)
         }
         
@@ -472,14 +457,12 @@ public struct PIRVerification {
         case onAppear
         case onDisappear
         
-        // Protocol & Configuration
-        case selectProtocol(State.PIRProtocolSelection)
-        case updateServerURL(String)
+        // Configuration
         case toggleTechnicalDetails
         
-        // Connection
+        // Connection (uses lightwalletd, no separate URL needed)
         case connect
-        case connectionSucceeded(ServerInfo)
+        case connectionSucceeded(PIRClient.PIRServerInfo)
         case connectionFailed(String)
         case keysReady
         
@@ -520,8 +503,8 @@ public struct PIRVerification {
         Reduce { state, action in
             switch action {
             case .onAppear:
-                // Auto-connect if we have a server URL
-                if state.connectionState == .disconnected && !state.serverURL.isEmpty {
+                // Auto-connect on appear (uses lightwalletd connection)
+                if state.connectionState == .disconnected {
                     return .send(.connect)
                 }
                 return .none
@@ -533,23 +516,7 @@ public struct PIRVerification {
                     .cancel(id: CancelID.test)
                 )
                 
-            // MARK: Protocol & Configuration
-                
-            case .selectProtocol(let proto):
-                state.selectedProtocol = proto
-                state.saveToUserDefaults()
-                // Disconnect and reconnect when protocol changes
-                if state.connectionState.isConnected {
-                    pirClient.disconnect()
-                    state.connectionState = .disconnected
-                    state.keysReady = false
-                }
-                return .none
-                
-            case .updateServerURL(let url):
-                state.serverURL = url
-                state.saveToUserDefaults()
-                return .none
+            // MARK: Configuration
                 
             case .toggleTechnicalDetails:
                 state.showTechnicalDetails.toggle()
@@ -560,17 +527,11 @@ public struct PIRVerification {
                 
             case .connect:
                 state.connectionState = .connecting
-                let serverURL = state.serverURL
-                let pirProtocol = state.selectedProtocol.sdkProtocol
-                let protocolName = state.selectedProtocol.displayName
                 
                 return .run { send in
                     do {
-                        // Fetch real server info from /health endpoint
-                        let serverInfo = try await ServerInfo.fetch(from: serverURL)
-                        
-                        // Connect to the PIR server
-                        try await pirClient.connect(serverURL, pirProtocol)
+                        // Fetch PIR params via lightwalletd gRPC
+                        let serverInfo = try await pirClient.fetchServerInfo()
                         
                         await send(.connectionSucceeded(serverInfo))
                     } catch {
@@ -581,7 +542,15 @@ public struct PIRVerification {
                 
             case .connectionSucceeded(let info):
                 state.connectionState = .connected
-                state.serverInfo = info
+                // Convert PIRServerInfo to local ServerInfo type
+                state.serverInfo = ServerInfo(
+                    protocolName: info.protocolName,
+                    numRecords: info.numBuckets,
+                    numNullifiers: info.numNullifiers,
+                    keywordMethod: "Cuckoo",
+                    lweDim: 1024,
+                    ringDim: 1024
+                )
                 return .none
                 
             case .connectionFailed(let error):
@@ -601,38 +570,36 @@ public struct PIRVerification {
                 }
                 
                 state.testResult = .running(testType)
-                let serverURL = state.serverURL
-                let pirProtocol = state.selectedProtocol.sdkProtocol
                 let nullifier = testType == .spent ? TestNullifiers.knownSpent : TestNullifiers.syntheticUnspent
                 
                 return .run { send in
                     do {
-                        // Connect if needed
-                        try await pirClient.connect(serverURL, pirProtocol)
-                        
-                        // Precompute keys if needed
+                        // Initialize if needed (this precomputes keys)
                         if !pirClient.keysReady() {
-                            try await pirClient.precomputeKeys()
+                            try await pirClient.initialize()
                         }
                         
-                        // Check the nullifier with timing
-                        let result = try await pirClient.checkNullifierWithTiming(nullifier)
+                        // Check the nullifier
+                        // Note: Timing info not available in new API - use placeholder
+                        let startTime = DispatchTime.now()
+                        let spentInfo = try await pirClient.checkNullifier(nullifier)
+                        let endTime = DispatchTime.now()
+                        let totalMs = Int((endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000)
                         
-                        // Update metrics - use "oldest note" scenario for worst-case comparison
-                        // This assumes note is from block 420k, ~2.78M blocks behind
+                        // Update metrics with timing from measurement
                         let metrics = QueryMetrics(
-                            queryGenerationMs: result.timing.queryGenerationMs,
-                            networkMs: result.timing.networkMs,
-                            serverProcessingMs: result.timing.serverProcessingMs,
-                            decryptionMs: result.timing.decryptionMs,
-                            totalMs: result.timing.totalMs,
-                            uploadedBytes: result.timing.uploadBytes,
-                            downloadedBytes: result.timing.downloadBytes,
+                            queryGenerationMs: 0,
+                            networkMs: 0,
+                            serverProcessingMs: 0,
+                            decryptionMs: 0,
+                            totalMs: totalMs,
+                            uploadedBytes: 0,
+                            downloadedBytes: 0,
                             nullifiersChecked: 1,
                             blocksBehind: TraditionalSyncEstimates.Scenario.oldestNote.blocksBehind
                         )
                         await send(.updateMetrics(metrics))
-                        await send(.testCompleted(testType, result.spentInfo))
+                        await send(.testCompleted(testType, spentInfo))
                         
                     } catch {
                         await send(.testFailed(testType, error.localizedDescription))
@@ -673,19 +640,14 @@ public struct PIRVerification {
                 
             case .startVerification:
                 state.verificationState = .connecting
-                let serverURL = state.serverURL
-                let pirProtocol = state.selectedProtocol.sdkProtocol
                 let network = zcashSDKEnvironment.network
                 let dataDbURL = databaseFiles.dataDbURLFor(network)
                 
                 return .run { send in
                     do {
-                        // Step 1: Connect to PIR server
-                        try await pirClient.connect(serverURL, pirProtocol)
-                        
-                        // Step 2: Precompute keys
+                        // Step 1 & 2: Initialize PIR (connects and precomputes keys)
                         await send(.verificationStateChanged(.preparingKeys))
-                        try await pirClient.precomputeKeys()
+                        try await pirClient.initialize()
                         
                         // Step 3: Get real wallet nullifiers
                         let walletNullifiers = try await pirClient.getUnspentNullifiers(
@@ -707,31 +669,13 @@ public struct PIRVerification {
                         var spentCount = 0
                         var spentNotes: [SpentNoteInfo] = []
                         
-                        // Accumulated timing
-                        var totalQueryGenMs = 0
-                        var totalNetworkMs = 0
-                        var totalServerMs = 0
-                        var totalDecryptMs = 0
-                        var totalUploadBytes = 0
-                        var totalDownloadBytes = 0
-                        
                         let verificationStart = DispatchTime.now()
                         
-                        // Step 4: Check each nullifier with timing
+                        // Step 4: Check each nullifier
                         for (index, nullifier) in walletNullifiers.enumerated() {
                             await send(.verificationProgress(index + 1, totalNotes))
                             
-                            let result = try await pirClient.checkNullifierWithTiming(nullifier)
-                            
-                            // Accumulate timing
-                            totalQueryGenMs += result.timing.queryGenerationMs
-                            totalNetworkMs += result.timing.networkMs
-                            totalServerMs += result.timing.serverProcessingMs
-                            totalDecryptMs += result.timing.decryptionMs
-                            totalUploadBytes += result.timing.uploadBytes
-                            totalDownloadBytes += result.timing.downloadBytes
-                            
-                            if let spentInfo = result.spentInfo {
+                            if let spentInfo = try await pirClient.checkNullifier(nullifier) {
                                 spentCount += 1
                                 spentNotes.append(SpentNoteInfo(
                                     blockHeight: UInt32(spentInfo.blockHeight),
@@ -743,16 +687,15 @@ public struct PIRVerification {
                         let verificationEnd = DispatchTime.now()
                         let totalMs = Int((verificationEnd.uptimeNanoseconds - verificationStart.uptimeNanoseconds) / 1_000_000)
                         
-                        // Update metrics - use "oldest note" scenario for comparison
-                        // Real implementation could track actual note ages
+                        // Update metrics
                         let metrics = QueryMetrics(
-                            queryGenerationMs: totalQueryGenMs,
-                            networkMs: totalNetworkMs,
-                            serverProcessingMs: totalServerMs,
-                            decryptionMs: totalDecryptMs,
+                            queryGenerationMs: 0,
+                            networkMs: 0,
+                            serverProcessingMs: 0,
+                            decryptionMs: 0,
                             totalMs: totalMs,
-                            uploadedBytes: totalUploadBytes,
-                            downloadedBytes: totalDownloadBytes,
+                            uploadedBytes: 0,
+                            downloadedBytes: 0,
                             nullifiersChecked: totalNotes,
                             blocksBehind: TraditionalSyncEstimates.Scenario.oldestNote.blocksBehind
                         )

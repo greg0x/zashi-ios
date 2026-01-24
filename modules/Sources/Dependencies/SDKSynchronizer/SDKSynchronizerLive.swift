@@ -317,6 +317,12 @@ extension SDKSynchronizerClient: DependencyKey {
             },
             enhanceTransactionBy: { txId in
                 try await synchronizer.enhanceTransactionBy(txId: TxId(txId))
+            },
+            createPIRClient: {
+                synchronizer.createPIRClient()
+            },
+            getPirParams: {
+                try await synchronizer.getPirParams()
             }
         )
     }

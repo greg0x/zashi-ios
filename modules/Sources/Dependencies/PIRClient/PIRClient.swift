@@ -65,48 +65,46 @@ public struct PIRServerInfo: Equatable, Sendable {
     public let protocolName: String
     public let numNullifiers: Int
     public let numBuckets: Int
-    public let lweDim: Int?
-    public let ringDim: Int?
-    public let recordSize: Int?
+    public let pirCutoffHeight: BlockHeight
+    public let pirReady: Bool
     
     public init(
-        protocolName: String = "YPIR",
+        protocolName: String = "InsPIRe",
         numNullifiers: Int = 0,
         numBuckets: Int = 0,
-        lweDim: Int? = nil,
-        ringDim: Int? = nil,
-        recordSize: Int? = nil
+        pirCutoffHeight: BlockHeight = 0,
+        pirReady: Bool = false
     ) {
         self.protocolName = protocolName
         self.numNullifiers = numNullifiers
         self.numBuckets = numBuckets
-        self.lweDim = lweDim
-        self.ringDim = ringDim
-        self.recordSize = recordSize
+        self.pirCutoffHeight = pirCutoffHeight
+        self.pirReady = pirReady
     }
 }
 
 // MARK: - PIR Client Dependency
 
 /// TCA dependency for PIR operations.
+///
+/// This client uses the synchronizer's lightwalletd connection for PIR queries,
+/// eliminating the need for a separate PIR server URL.
 public struct PIRClient: Sendable {
-    /// Create and connect to PIR server with specified protocol
-    public var connect: @Sendable (String, PIRProtocol) async throws -> Void
+    /// Initialize PIR client using the synchronizer's connection.
+    /// This fetches PIR params and precomputes cryptographic keys.
+    public var initialize: @Sendable () async throws -> Void
     
-    /// Fetch server info (health check)
+    /// Fetch server info (PIR params)
     public var fetchServerInfo: @Sendable () async throws -> PIRServerInfo
-    
-    /// Precompute cryptographic keys
-    public var precomputeKeys: @Sendable () async throws -> Void
     
     /// Check if keys are ready
     public var keysReady: @Sendable () -> Bool
     
-    /// Check a single nullifier (returns timing info)
-    public var checkNullifier: @Sendable (Data) async throws -> SpentInfo?
+    /// Check if PIR should be used for the given sync height
+    public var shouldUsePIR: @Sendable (BlockHeight) -> Bool
     
-    /// Check a single nullifier with timing breakdown
-    public var checkNullifierWithTiming: @Sendable (Data) async throws -> PIRCheckResult
+    /// Check a single nullifier
+    public var checkNullifier: @Sendable (Data) async throws -> SpentInfo?
     
     /// Check multiple nullifiers
     public var checkNullifiers: @Sendable ([Data]) async throws -> [SpentInfo?]
@@ -123,31 +121,27 @@ extension PIRClient: DependencyKey {
         // Actor to hold the client state
         actor PIRClientState {
             var client: NullifierPIRClient?
-            var currentProtocol: PIRProtocol = .inspire
             
-            func connect(serverURL: String, protocol pirProtocol: PIRProtocol) async throws {
-                currentProtocol = pirProtocol
-                client = try NullifierPIRClient(serverURL: serverURL, protocol: pirProtocol)
+            @Dependency(\.sdkSynchronizer) var sdkSynchronizer
+            
+            func initialize() async throws {
+                // Create PIR client from synchronizer
+                client = sdkSynchronizer.createPIRClient()
+                
+                // Initialize (fetches params and precomputes keys)
+                try await client?.initialize()
             }
             
             func fetchServerInfo() async throws -> PIRServerInfo {
-                // For now, return placeholder - would fetch from /health endpoint
-                let protocolName = currentProtocol == .inspire ? "InsPIRe" : "YPIR"
+                let params = try await sdkSynchronizer.getPirParams()
+                
                 return PIRServerInfo(
-                    protocolName: protocolName,
-                    numNullifiers: 51_700_000,
-                    numBuckets: 6_462_500,
-                    lweDim: 1024,
-                    ringDim: 1024,
-                    recordSize: 112
+                    protocolName: "InsPIRe",
+                    numNullifiers: Int(params.numNullifiers),
+                    numBuckets: Int(params.cuckooParams.numBuckets),
+                    pirCutoffHeight: BlockHeight(params.pirCutoffHeight),
+                    pirReady: params.pirReady
                 )
-            }
-            
-            func precomputeKeys() async throws {
-                guard let client else {
-                    throw PIRError.clientNotInitialized
-                }
-                try await client.precomputeKeys()
             }
             
             func keysReady() async -> Bool {
@@ -155,37 +149,16 @@ extension PIRClient: DependencyKey {
                 return await client.keysReady
             }
             
+            func shouldUsePIR(lastSyncHeight: BlockHeight) async -> Bool {
+                guard let client else { return false }
+                return await client.shouldUsePIR(lastSyncHeight: lastSyncHeight)
+            }
+            
             func checkNullifier(_ nullifier: Data) async throws -> SpentInfo? {
                 guard let client else {
                     throw PIRError.clientNotInitialized
                 }
                 return try await client.checkNullifier(nullifier)
-            }
-            
-            func checkNullifierWithTiming(_ nullifier: Data) async throws -> PIRCheckResult {
-                guard let client else {
-                    throw PIRError.clientNotInitialized
-                }
-                
-                // Use the FFI method that returns actual measurements
-                let result = try await client.checkNullifierWithStats(nullifier)
-                
-                // All timing and byte data comes from actual Rust measurements
-                let stats = result.stats
-                let totalMs = Int(stats.queryGenMs + stats.networkMs + stats.serverMs + stats.decryptMs)
-                
-                return PIRCheckResult(
-                    spentInfo: result.spentInfo,
-                    timing: PIRQueryTiming(
-                        queryGenerationMs: Int(stats.queryGenMs),
-                        networkMs: Int(stats.networkMs),
-                        serverProcessingMs: Int(stats.serverMs),
-                        decryptionMs: Int(stats.decryptMs),
-                        totalMs: totalMs,
-                        uploadBytes: stats.uploadBytes,
-                        downloadBytes: stats.downloadBytes
-                    )
-                )
             }
             
             func checkNullifiers(_ nullifiers: [Data]) async throws -> [SpentInfo?] {
@@ -203,34 +176,27 @@ extension PIRClient: DependencyKey {
         let state = PIRClientState()
         
         return PIRClient(
-            connect: { serverURL, pirProtocol in
-                print("🔌 PIRClient: Connecting to \(serverURL) with protocol \(pirProtocol)")
-                try await state.connect(serverURL: serverURL, protocol: pirProtocol)
-                print("✅ PIRClient: Connected successfully")
+            initialize: {
+                print("🔌 PIRClient: Initializing using lightwalletd connection...")
+                try await state.initialize()
+                print("✅ PIRClient: Initialized and keys ready")
             },
             fetchServerInfo: {
                 try await state.fetchServerInfo()
-            },
-            precomputeKeys: {
-                print("🔑 PIRClient: Precomputing keys...")
-                try await state.precomputeKeys()
-                print("✅ PIRClient: Keys ready")
             },
             keysReady: {
                 // This is synchronous in the interface but we need to bridge
                 // For now, return false - the actual check happens async
                 false
             },
+            shouldUsePIR: { lastSyncHeight in
+                // Sync check - use Task for async bridging
+                false // Caller should use async version via NullifierPIRClient directly
+            },
             checkNullifier: { nullifier in
                 print("🔍 PIRClient: Checking nullifier \(nullifier.prefix(4).hexEncodedString())...")
                 let result = try await state.checkNullifier(nullifier)
                 print("📋 PIRClient: Result = \(result != nil ? "SPENT" : "not spent")")
-                return result
-            },
-            checkNullifierWithTiming: { nullifier in
-                print("🔍 PIRClient: Checking nullifier \(nullifier.prefix(4).hexEncodedString()) with timing...")
-                let result = try await state.checkNullifierWithTiming(nullifier)
-                print("📋 PIRClient: Result = \(result.spentInfo != nil ? "SPENT" : "not spent"), total: \(result.timing.totalMs)ms")
                 return result
             },
             checkNullifiers: { nullifiers in
@@ -252,31 +218,19 @@ extension PIRClient: DependencyKey {
     }()
     
     public static let testValue = PIRClient(
-        connect: { _, _ in },
+        initialize: { },
         fetchServerInfo: { 
             PIRServerInfo(
-                protocolName: "YPIR",
+                protocolName: "InsPIRe",
                 numNullifiers: 51_700_000,
                 numBuckets: 6_462_500,
-                lweDim: 1024,
-                ringDim: 1024
+                pirCutoffHeight: 2_800_000,
+                pirReady: true
             )
         },
-        precomputeKeys: { },
         keysReady: { true },
+        shouldUsePIR: { _ in true },
         checkNullifier: { _ in nil },
-        checkNullifierWithTiming: { _ in 
-            PIRCheckResult(
-                spentInfo: nil,
-                timing: PIRQueryTiming(
-                    queryGenerationMs: 100,
-                    networkMs: 80,
-                    serverProcessingMs: 50,
-                    decryptionMs: 20,
-                    totalMs: 250
-                )
-            )
-        },
         checkNullifiers: { nullifiers in Array(repeating: nil, count: nullifiers.count) },
         getUnspentNullifiers: { _, _ in
             // Return test nullifiers for testing
