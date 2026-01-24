@@ -546,6 +546,7 @@ let package = Package(
         .target(
             name: "PIRClient",
             dependencies: [
+                "SDKSynchronizer",
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "ZcashLightClientKit", package: "zcash-swift-wallet-sdk")
             ],

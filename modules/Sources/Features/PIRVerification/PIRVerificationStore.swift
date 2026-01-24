@@ -436,7 +436,7 @@ public struct PIRVerification {
         
         // Connection (uses lightwalletd, no separate URL needed)
         case connect
-        case connectionSucceeded(PIRClient.PIRServerInfo)
+        case connectionSucceeded(PIRServerInfo)
         case connectionFailed(String)
         case keysReady
         

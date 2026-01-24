@@ -129,7 +129,7 @@ extension SDKSynchronizerClient {
         updateTransparentAddressTransactions: { _ in .notFound },
         fetchUTXOsByAddress: { _, _ in .notFound },
         enhanceTransactionBy: { _ in },
-        createPIRClient: { fatalError("createPIRClient not implemented in noOp") },
+        createPIRClient: { nil },
         getPirParams: { fatalError("getPirParams not implemented in noOp") }
     )
 
@@ -254,7 +254,7 @@ extension SDKSynchronizerClient {
         updateTransparentAddressTransactions: @escaping (String) async throws -> TransparentAddressCheckResult = { _ in .notFound },
         fetchUTXOsByAddress: @escaping (String, AccountUUID) async throws -> TransparentAddressCheckResult = { _, _ in .notFound },
         enhanceTransactionBy: @escaping (String) async throws -> Void = { _ in },
-        createPIRClient: @escaping () -> NullifierPIRClient = { fatalError("createPIRClient not implemented in mocked") },
+        createPIRClient: @escaping () -> NullifierPIRClient? = { nil },
         getPirParams: @escaping () async throws -> PirParamsResponse = { fatalError("getPirParams not implemented in mocked") }
     ) -> SDKSynchronizerClient {
         SDKSynchronizerClient(

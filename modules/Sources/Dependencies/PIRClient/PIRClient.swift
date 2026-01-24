@@ -8,6 +8,7 @@
 import Foundation
 import ComposableArchitecture
 import ZcashLightClientKit
+import SDKSynchronizer
 
 // MARK: - Timing Types
 
@@ -116,73 +117,86 @@ public struct PIRClient: Sendable {
     public var disconnect: @Sendable () -> Void
 }
 
-extension PIRClient: DependencyKey {
-    public static let liveValue: PIRClient = {
-        // Actor to hold the client state
-        actor PIRClientState {
-            var client: NullifierPIRClient?
-            
-            @Dependency(\.sdkSynchronizer) var sdkSynchronizer
-            
-            func initialize() async throws {
-                // Create PIR client from synchronizer
-                client = sdkSynchronizer.createPIRClient()
-                
-                // Initialize (fetches params and precomputes keys)
-                try await client?.initialize()
-            }
-            
-            func fetchServerInfo() async throws -> PIRServerInfo {
-                let params = try await sdkSynchronizer.getPirParams()
-                
-                return PIRServerInfo(
-                    protocolName: "InsPIRe",
-                    numNullifiers: Int(params.numNullifiers),
-                    numBuckets: Int(params.cuckooParams.numBuckets),
-                    pirCutoffHeight: BlockHeight(params.pirCutoffHeight),
-                    pirReady: params.pirReady
-                )
-            }
-            
-            func keysReady() async -> Bool {
-                guard let client else { return false }
-                return await client.keysReady
-            }
-            
-            func shouldUsePIR(lastSyncHeight: BlockHeight) async -> Bool {
-                guard let client else { return false }
-                return await client.shouldUsePIR(lastSyncHeight: lastSyncHeight)
-            }
-            
-            func checkNullifier(_ nullifier: Data) async throws -> SpentInfo? {
-                guard let client else {
-                    throw PIRError.clientNotInitialized
-                }
-                return try await client.checkNullifier(nullifier)
-            }
-            
-            func checkNullifiers(_ nullifiers: [Data]) async throws -> [SpentInfo?] {
-                guard let client else {
-                    throw PIRError.clientNotInitialized
-                }
-                return try await client.checkNullifiers(nullifiers)
-            }
-            
-            func disconnect() {
-                client = nil
-            }
-        }
+// Provider class to hold client state - uses actor isolation internally
+private final class PIRClientProvider: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _client: NullifierPIRClient?
+    
+    var client: NullifierPIRClient? {
+        get { lock.withLock { _client } }
+        set { lock.withLock { _client = newValue } }
+    }
+    
+    func initialize() async throws {
+        @Dependency(\.sdkSynchronizer) var sdkSynchronizer
         
-        let state = PIRClientState()
+        // Create PIR client from synchronizer
+        guard let newClient = sdkSynchronizer.createPIRClient() else {
+            throw PIRError.clientNotInitialized
+        }
+        client = newClient
+        
+        // Initialize (fetches params and precomputes keys)
+        try await newClient.initialize()
+    }
+    
+    func fetchServerInfo() async throws -> PIRServerInfo {
+        @Dependency(\.sdkSynchronizer) var sdkSynchronizer
+        
+        let params = try await sdkSynchronizer.getPirParams()
+        
+        return PIRServerInfo(
+            protocolName: "InsPIRe",
+            numNullifiers: Int(params.numNullifiers),
+            numBuckets: Int(params.cuckooParams.numBuckets),
+            pirCutoffHeight: BlockHeight(params.pirCutoffHeight),
+            pirReady: params.pirReady
+        )
+    }
+    
+    func keysReady() async -> Bool {
+        guard let client else { return false }
+        return await client.keysReady
+    }
+    
+    func shouldUsePIR(lastSyncHeight: BlockHeight) async -> Bool {
+        guard let client else { return false }
+        return await client.shouldUsePIR(lastSyncHeight: lastSyncHeight)
+    }
+    
+    func checkNullifier(_ nullifier: Data) async throws -> SpentInfo? {
+        guard let client else {
+            throw PIRError.clientNotInitialized
+        }
+        return try await client.checkNullifier(nullifier)
+    }
+    
+    func checkNullifiers(_ nullifiers: [Data]) async throws -> [SpentInfo?] {
+        guard let client else {
+            throw PIRError.clientNotInitialized
+        }
+        return try await client.checkNullifiers(nullifiers)
+    }
+    
+    func disconnect() {
+        client = nil
+    }
+}
+
+extension PIRClient: DependencyKey {
+    public static let liveValue: PIRClient = Self.live()
+    
+    public static func live() -> Self {
+        let provider = PIRClientProvider()
         
         return PIRClient(
             initialize: {
                 print("🔌 PIRClient: Initializing using lightwalletd connection...")
-                try await state.initialize()
+                try await provider.initialize()
                 print("✅ PIRClient: Initialized and keys ready")
             },
             fetchServerInfo: {
-                try await state.fetchServerInfo()
+                try await provider.fetchServerInfo()
             },
             keysReady: {
                 // This is synchronous in the interface but we need to bridge
@@ -195,12 +209,12 @@ extension PIRClient: DependencyKey {
             },
             checkNullifier: { nullifier in
                 print("🔍 PIRClient: Checking nullifier \(nullifier.prefix(4).hexEncodedString())...")
-                let result = try await state.checkNullifier(nullifier)
+                let result = try await provider.checkNullifier(nullifier)
                 print("📋 PIRClient: Result = \(result != nil ? "SPENT" : "not spent")")
                 return result
             },
             checkNullifiers: { nullifiers in
-                try await state.checkNullifiers(nullifiers)
+                try await provider.checkNullifiers(nullifiers)
             },
             getUnspentNullifiers: { dataDbURL, networkType in
                 print("📖 PIRClient: Getting unspent nullifiers from wallet...")
@@ -212,10 +226,10 @@ extension PIRClient: DependencyKey {
                 return nullifiers
             },
             disconnect: {
-                Task { await state.disconnect() }
+                provider.disconnect()
             }
         )
-    }()
+    }
     
     public static let testValue = PIRClient(
         initialize: { },
