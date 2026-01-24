@@ -271,32 +271,6 @@ public struct SpentNoteInfo: Equatable, Identifiable {
 public struct PIRVerification {
     @ObservableState
     public struct State: Equatable {
-        // MARK: Protocol Selection
-        
-        public enum PIRProtocolSelection: String, CaseIterable, Equatable {
-            case inspire = "InsPIRe"
-            case ypir = "YPIR"
-            
-            public var displayName: String { rawValue }
-            
-            public var description: String {
-                switch self {
-                case .inspire:
-                    return "~416 KB queries, ~3s key prep"
-                case .ypir:
-                    return "~5.8 MB queries, ~25s key prep"
-                }
-            }
-            
-            /// Convert to SDK protocol type
-            public var sdkProtocol: ZcashLightClientKit.PIRProtocol {
-                switch self {
-                case .ypir: return .ypir
-                case .inspire: return .inspire
-                }
-            }
-        }
-        
         // MARK: Connection State
         
         public enum ConnectionState: Equatable {

@@ -68,36 +68,6 @@ public struct PIRVerificationView: View {
             sectionHeader(title: "⚙️ Configuration")
             
             VStack(spacing: 12) {
-                // Protocol Selection
-                HStack {
-                    Text("Protocol")
-                        .zFont(.medium, size: 14, style: Design.Text.tertiary)
-                    
-                    Spacer()
-                    
-                    Menu {
-                        ForEach(PIRVerification.State.PIRProtocolSelection.allCases, id: \.self) { proto in
-                            Button(proto.displayName) {
-                                store.send(.selectProtocol(proto))
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(store.selectedProtocol.displayName)
-                                .zFont(.medium, size: 14, style: Design.Text.primary)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 10))
-                                .foregroundColor(Asset.Colors.primary.color)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Design.Surfaces.bgTertiary.color(colorScheme))
-                        )
-                    }
-                }
-                
                 // Connection Status
                 HStack {
                     Text("Status")
@@ -114,23 +84,11 @@ public struct PIRVerificationView: View {
                     }
                 }
                 
-                // Server URL (editable when disconnected)
+                // Connection info
                 if !store.connectionState.isConnected {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Server URL")
-                            .zFont(.medium, size: 14, style: Design.Text.tertiary)
-                        
-                        TextField(
-                            "http://localhost:8000",
-                            text: Binding(
-                                get: { store.serverURL },
-                                set: { store.send(.updateServerURL($0)) }
-                            )
-                        )
-                        .textFieldStyle(.roundedBorder)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                        .zFont(size: 14, style: Design.Text.primary)
+                        Text("Uses lightwalletd connection (InsPIRe protocol)")
+                            .zFont(size: 12, style: Design.Text.tertiary)
                         
                         // Connection error with retry
                         if case .failed(let error) = store.connectionState {
@@ -154,7 +112,7 @@ public struct PIRVerificationView: View {
                         }
                     }
                 } else if store.serverInfo != nil {
-                    Text("Server: \(store.serverURL)")
+                    Text("Using lightwalletd connection (InsPIRe protocol)")
                         .zFont(size: 12, style: Design.Text.tertiary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -660,7 +618,7 @@ public struct PIRVerificationView: View {
                     GridRow {
                         Text("Protocol")
                             .zFont(size: 12, style: Design.Text.tertiary)
-                        Text("\(info.protocolName) (\(store.selectedProtocol.description))")
+                        Text(info.protocolName)
                             .zFont(size: 12, style: Design.Text.primary)
                     }
                     

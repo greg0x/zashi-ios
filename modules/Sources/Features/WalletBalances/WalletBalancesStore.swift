@@ -23,8 +23,6 @@ import WalletStorage
 
 /// Keys for PIR settings in UserDefaults (shared with PIRVerification feature)
 public enum PIRUserDefaultsKeys {
-    /// PIR server URL (shared with PIRVerification)
-    public static let serverURL = "pir.serverURL"
     /// Whether automatic PIR balance verification is enabled
     public static let balanceVerificationEnabled = "pir.balanceVerificationEnabled"
 }
@@ -98,8 +96,6 @@ public struct WalletBalances {
         /// Threshold: trigger PIR automatically when this many blocks behind
         /// Set relatively low to make testing easier; can increase for production
         public static let pirBlocksThreshold: Int = 50
-        /// PIR server URL
-        public var pirServerURL: String = "http://localhost:8000"
         /// Track the sync session to avoid re-triggering PIR
         public var pirLastSyncSessionID: UUID?
 
@@ -158,11 +154,8 @@ public struct WalletBalances {
             self.transparentBalance = transparentBalance
             
             // Load PIR settings from UserDefaults
-            let defaults = UserDefaults.standard
-            if let savedURL = defaults.string(forKey: PIRUserDefaultsKeys.serverURL), !savedURL.isEmpty {
-                self.pirServerURL = savedURL
-            }
             // Default to enabled if not set (opt-out model)
+            let defaults = UserDefaults.standard
             self.isPIREnabled = defaults.object(forKey: PIRUserDefaultsKeys.balanceVerificationEnabled) as? Bool ?? true
         }
     }
@@ -185,7 +178,6 @@ public struct WalletBalances {
         case pirVerificationFailed(String)
         case pirCancelVerification
         case pirSetEnabled(Bool)
-        case pirSetServerURL(String)
         case pirTriggerManually
     }
 
@@ -373,20 +365,15 @@ public struct WalletBalances {
                 state.pirBlocksBehind = blocksBehind
                 state.pirVerificationState = .connecting
                 
-                let serverURL = state.pirServerURL
                 let network = zcashSDKEnvironment.network
                 let dataDbURL = databaseFiles.dataDbURLFor(network)
                 let currentBalance = state.shieldedBalance
                 
                 return .run { send in
                     do {
-                        // Step 1: Connect to PIR server
-                        await send(.pirStateChanged(.connecting))
-                        try await pirClient.connect(serverURL, .inspire)
-                        
-                        // Step 2: Precompute keys (expensive, but cached for session)
+                        // Step 1 & 2: Initialize PIR (connects via lightwalletd, precomputes keys)
                         await send(.pirStateChanged(.preparingKeys))
-                        try await pirClient.precomputeKeys()
+                        try await pirClient.initialize()
                         
                         // Step 3: Get unspent nullifiers from wallet
                         let nullifiers = try await pirClient.getUnspentNullifiers(
@@ -459,11 +446,6 @@ public struct WalletBalances {
                 if !enabled && state.pirVerificationState.isActive {
                     return .send(.pirCancelVerification)
                 }
-                return .none
-                
-            case .pirSetServerURL(let url):
-                state.pirServerURL = url
-                UserDefaults.standard.set(url, forKey: PIRUserDefaultsKeys.serverURL)
                 return .none
                 
             case .pirTriggerManually:
