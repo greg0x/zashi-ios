@@ -21,9 +21,9 @@ extension DependencyValues {
 
 extension ZcashSDKEnvironment {
     public enum ZcashSDKConstants {
-        static let endpointMainnetAddress = "zec.rocks"
+        static let endpointMainnetAddress = "zec.dhamma.works"
         static let endpointTestnetAddress = "testnet.zec.rocks"
-        static let endpointMainnetPort = 443
+        static let endpointMainnetPort = 9067
         static let endpointTestnetPort = 443
         static let mnemonicWordsMaxCount = 24
         static let requiredTransactionConfirmations = 10
@@ -103,7 +103,8 @@ extension ZcashSDKEnvironment {
                 LightWalletEndpoint(address: "eu.zec.stardust.rest", port: 443),
                 LightWalletEndpoint(address: "eu2.zec.stardust.rest", port: 443),
                 LightWalletEndpoint(address: "jp.zec.stardust.rest", port: 443),
-                LightWalletEndpoint(address: "us.zec.stardust.rest", port: 443)
+                LightWalletEndpoint(address: "us.zec.stardust.rest", port: 443),
+                LightWalletEndpoint(address: "zec.dhamma.works", port: 9067)
             ]
         )
         
