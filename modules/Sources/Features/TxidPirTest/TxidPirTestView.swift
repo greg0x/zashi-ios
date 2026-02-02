@@ -46,16 +46,6 @@ public struct TxidPirTestView: View {
             Text("Connection")
                 .zFont(.semiBold, size: 16, style: Design.Text.primary)
 
-            // Server URL
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Server URL")
-                    .zFont(size: 12, style: Design.Text.tertiary)
-                TextField("Server URL", text: $store.serverURL)
-                    .textFieldStyle(.roundedBorder)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
-            }
-
             // Status
             HStack {
                 Text("Status:")

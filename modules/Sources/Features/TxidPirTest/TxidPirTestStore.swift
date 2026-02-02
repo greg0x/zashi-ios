@@ -14,9 +14,6 @@ import SDKSynchronizer
 public struct TxidPirTest {
     @ObservableState
     public struct State: Equatable {
-        // Server configuration
-        public var serverURL: String = "https://jcrziax9ibr1dp-8081.proxy.runpod.net"
-
         // Connection state
         public var connectionState: ConnectionState = .disconnected
 
