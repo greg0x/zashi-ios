@@ -56,7 +56,14 @@ extension SDKSynchronizerClient: DependencyKey {
             isExchangeRateEnabled: isRateEnabled
         )
         
-        let synchronizer = SDKSynchronizer(initializer: initializer)
+        // PIR testing configuration:
+        // - isPirEnhanceEnabled: true to use PIR for transaction enhancement
+        // - debugDisableMempoolSync: true to force all transactions through block sync → enhancement → PIR
+        let pirConfig = PirConfig(
+            isPirEnhanceEnabled: true,
+            debugDisableMempoolSync: true
+        )
+        let synchronizer = SDKSynchronizer(initializer: initializer, pirConfig: pirConfig)
 
         return SDKSynchronizerClient(
             stateStream: { synchronizer.stateStream },
