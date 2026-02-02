@@ -18,6 +18,7 @@ import ServerSetup
 import SendFeedback
 import WhatsNew
 import TorSetup
+import TxidPirTest
 
 public struct SettingsView: View {
     @Environment(\.colorScheme) var colorScheme
@@ -139,6 +140,8 @@ public struct SettingsView: View {
                     SendFeedbackView(store: store)
                 case let .torSetup(store):
                     TorSetupView(store: store)
+                case let .txidPirTest(store):
+                    TxidPirTestView(store: store)
                 case let .whatsNew(store):
                     WhatsNewView(store: store)
                 }
