@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 import ComposableArchitecture
 import ZcashLightClientKit
 import SDKSynchronizer
@@ -14,6 +15,10 @@ import SDKSynchronizer
 public struct TxidPirTest {
     @ObservableState
     public struct State: Equatable {
+        // PIR Config (hardcoded for testing - matches SDKSynchronizerLive)
+        public var isPirEnhanceEnabled: Bool = true
+        public var debugDisableMempoolSync: Bool = true
+
         // Connection state
         public var connectionState: ConnectionState = .disconnected
 
@@ -36,6 +41,20 @@ public struct TxidPirTest {
 
         // Error
         public var errorMessage: String?
+
+        // Live Enhancement Feed
+        public var enhancementEvents: [EnhancementEventDisplay] = []
+
+        // Stats
+        public var totalEnhancements: Int = 0
+        public var pirSuccessCount: Int = 0
+        public var fallbackCount: Int = 0
+        public var getTransactionCount: Int = 0
+
+        public var successRate: Double {
+            guard totalEnhancements > 0 else { return 0 }
+            return Double(pirSuccessCount) / Double(totalEnhancements) * 100
+        }
 
         public enum ConnectionState: Equatable {
             case disconnected
@@ -73,6 +92,11 @@ public struct TxidPirTest {
 
         // Fill from result
         case fillActionDataFromResult
+
+        // Enhancement events (from SDK eventStream)
+        case startEventStream
+        case pirEnhancementReceived(EnhancementEventDisplay)
+        case clearStats
     }
 
     @Dependency(\.sdkSynchronizer) var sdkSynchronizer
@@ -90,7 +114,7 @@ public struct TxidPirTest {
                 return .none
 
             case .onAppear:
-                return .none
+                return .send(.startEventStream)
 
             case .onDisappear:
                 return .run { [sdkSynchronizer] _ in
@@ -290,6 +314,54 @@ public struct TxidPirTest {
                     state.actionCountInput = String(result.actionCount)
                 }
                 return .none
+
+            // MARK: - Enhancement Events
+
+            case .startEventStream:
+                return .run { [sdkSynchronizer] send in
+                    for await event in sdkSynchronizer.eventStream().values {
+                        if case .pirEnhancement(let pirEvent) = event {
+                            let display = EnhancementEventDisplay(
+                                txId: pirEvent.txId.prefix(8).map { String(format: "%02x", $0) }.joined() + "...",
+                                blockHeight: pirEvent.blockHeight,
+                                method: pirEvent.method,
+                                success: pirEvent.success,
+                                actionCount: pirEvent.actionCount,
+                                timingMs: pirEvent.timingMs,
+                                timestamp: Date()
+                            )
+                            await send(.pirEnhancementReceived(display))
+                        }
+                    }
+                }
+                .cancellable(id: CancelID.pirOperation, cancelInFlight: false)
+
+            case .pirEnhancementReceived(let event):
+                // Add to the front of the list, keep max 20 events
+                state.enhancementEvents.insert(event, at: 0)
+                if state.enhancementEvents.count > 20 {
+                    state.enhancementEvents.removeLast()
+                }
+
+                // Update stats
+                state.totalEnhancements += 1
+                switch event.method {
+                case .pir:
+                    state.pirSuccessCount += 1
+                case .fallback:
+                    state.fallbackCount += 1
+                case .getTransaction:
+                    state.getTransactionCount += 1
+                }
+                return .none
+
+            case .clearStats:
+                state.enhancementEvents = []
+                state.totalEnhancements = 0
+                state.pirSuccessCount = 0
+                state.fallbackCount = 0
+                state.getTransactionCount = 0
+                return .none
             }
         }
     }
@@ -319,6 +391,25 @@ public struct QueryTimingDisplay: Equatable {
 
     public var totalMs: Double {
         queryGenMs + networkMs + serverMs + decryptMs
+    }
+}
+
+public struct EnhancementEventDisplay: Equatable, Identifiable {
+    public let id = UUID()
+    public let txId: String  // Truncated hex string
+    public let blockHeight: UInt32
+    public let method: PirEnhancementMethod
+    public let success: Bool
+    public let actionCount: Int
+    public let timingMs: Double?
+    public let timestamp: Date
+
+    public var methodSymbol: String {
+        switch method {
+        case .pir: return "✓ PIR"
+        case .fallback: return "⚠️ Fallback"
+        case .getTransaction: return "✗ GetTx"
+        }
     }
 }
 
