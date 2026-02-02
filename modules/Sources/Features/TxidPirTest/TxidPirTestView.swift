@@ -25,10 +25,6 @@ public struct TxidPirTestView: View {
                     configStatusSection
                     statsSection
                     enhancementFeedSection
-                    connectionSection
-                    txLookupSection
-                    actionDataSection
-                    timingSection
                     errorSection
                 }
                 .padding(16)
@@ -36,7 +32,7 @@ public struct TxidPirTestView: View {
             .applyScreenBackground()
             .navigationBarTitleDisplayMode(.inline)
             .zashiBack()
-            .screenTitle("Txid PIR Test")
+            .screenTitle("PIR Enhancement Monitor")
             .onAppear { store.send(.onAppear) }
             .onDisappear { store.send(.onDisappear) }
         }
