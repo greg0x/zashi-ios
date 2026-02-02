@@ -323,6 +323,9 @@ extension SDKSynchronizerClient: DependencyKey {
             },
             getPirParams: {
                 try await synchronizer.getPirParams()
+            },
+            createTxidPirClient: {
+                synchronizer.createTxidPirClient()
             }
         )
     }

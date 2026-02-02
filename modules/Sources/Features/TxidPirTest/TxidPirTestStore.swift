@@ -8,6 +8,7 @@
 import Foundation
 import ComposableArchitecture
 import ZcashLightClientKit
+import SDKSynchronizer
 
 @Reducer
 public struct TxidPirTest {
@@ -77,7 +78,7 @@ public struct TxidPirTest {
         case fillActionDataFromResult
     }
 
-    @Dependency(\.txidPirClient) var txidPirClient
+    @Dependency(\.sdkSynchronizer) var sdkSynchronizer
 
     public init() {}
 
@@ -95,8 +96,10 @@ public struct TxidPirTest {
                 return .none
 
             case .onDisappear:
-                return .run { _ in
-                    await txidPirClient.disconnect()
+                return .run { [sdkSynchronizer] _ in
+                    if let client = sharedTxidPirClientHolder.getOrCreate(from: sdkSynchronizer) {
+                        await client.disconnect()
+                    }
                 }
 
             // MARK: - Connection
@@ -105,12 +108,16 @@ public struct TxidPirTest {
                 state.connectionState = .connecting
                 state.errorMessage = nil
 
-                return .run { send in
+                return .run { [sdkSynchronizer] send in
                     do {
-                        // Note: connect() now uses gRPC via lightwalletd (no serverURL needed)
-                        try await txidPirClient.connect()
-                        if let txParams = await txidPirClient.txLookupParams,
-                           let actionParams = await txidPirClient.actionDataParams {
+                        guard let client = sharedTxidPirClientHolder.getOrCreate(from: sdkSynchronizer) else {
+                            await send(.connectionFailed("Failed to create PIR client - synchronizer not ready"))
+                            return
+                        }
+                        // connect() uses gRPC via lightwalletd
+                        try await client.connect()
+                        if let txParams = await client.txLookupParams,
+                           let actionParams = await client.actionDataParams {
                             await send(.connectionSucceeded(txParams, actionParams))
                         } else {
                             await send(.connectionFailed("Failed to get params"))
@@ -136,9 +143,13 @@ public struct TxidPirTest {
                 state.connectionState = .precomputing
                 state.errorMessage = nil
 
-                return .run { send in
+                return .run { [sdkSynchronizer] send in
                     do {
-                        try await txidPirClient.precomputeKeys()
+                        guard let client = sharedTxidPirClientHolder.getOrCreate(from: sdkSynchronizer) else {
+                            await send(.keysFailed("PIR client not available"))
+                            return
+                        }
+                        try await client.precomputeKeys()
                         await send(.keysReady)
                     } catch {
                         await send(.keysFailed(error.localizedDescription))
@@ -172,9 +183,13 @@ public struct TxidPirTest {
                 state.errorMessage = nil
                 state.txLookupResult = nil
 
-                return .run { send in
+                return .run { [sdkSynchronizer] send in
                     do {
-                        let result = try await txidPirClient.queryTxLookup(
+                        guard let client = sharedTxidPirClientHolder.getOrCreate(from: sdkSynchronizer) else {
+                            await send(.txLookupFailed("PIR client not available"))
+                            return
+                        }
+                        let result = try await client.queryTxLookup(
                             blockHeight: blockHeight,
                             txIndex: txIndex
                         )
@@ -228,9 +243,13 @@ public struct TxidPirTest {
                 state.errorMessage = nil
                 state.actionDataResult = []
 
-                return .run { send in
+                return .run { [sdkSynchronizer] send in
                     do {
-                        let result = try await txidPirClient.queryActionData(
+                        guard let client = sharedTxidPirClientHolder.getOrCreate(from: sdkSynchronizer) else {
+                            await send(.actionDataFailed("PIR client not available"))
+                            return
+                        }
+                        let result = try await client.queryActionData(
                             startIndex: startIndex,
                             actionCount: actionCount
                         )
@@ -316,13 +335,25 @@ extension Data {
 
 // MARK: - Dependency
 
-private enum TxidPirClientKey: DependencyKey {
-    static let liveValue: TxidPirClient = TxidPirClient()
-}
+/// Shared TxidPirClient instance - created lazily from SDKSynchronizer
+private final class TxidPirClientHolder: @unchecked Sendable {
+    private var _client: TxidPirClient?
+    private let lock = NSLock()
 
-extension DependencyValues {
-    var txidPirClient: TxidPirClient {
-        get { self[TxidPirClientKey.self] }
-        set { self[TxidPirClientKey.self] = newValue }
+    func getOrCreate(from sdkSynchronizer: SDKSynchronizerClient) -> TxidPirClient? {
+        lock.lock()
+        defer { lock.unlock() }
+        if _client == nil {
+            _client = sdkSynchronizer.createTxidPirClient()
+        }
+        return _client
+    }
+
+    func clear() {
+        lock.lock()
+        defer { lock.unlock() }
+        _client = nil
     }
 }
+
+private let sharedTxidPirClientHolder = TxidPirClientHolder()

@@ -568,6 +568,7 @@ let package = Package(
             name: "TxidPirTest",
             dependencies: [
                 "Generated",
+                "SDKSynchronizer",
                 "UIComponents",
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "ZcashLightClientKit", package: "zcash-swift-wallet-sdk")

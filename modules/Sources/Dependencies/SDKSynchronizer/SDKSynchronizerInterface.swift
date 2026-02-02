@@ -101,11 +101,14 @@ public struct SDKSynchronizerClient {
     public var enhanceTransactionBy: (String) async throws -> Void
     
     // MARK: - PIR (Private Information Retrieval)
-    
+
     /// Create a PIR client using the synchronizer's lightwalletd connection.
     public var createPIRClient: () -> NullifierPIRClient?
-    
+
     /// Get PIR parameters from lightwalletd.
     public var getPirParams: () async throws -> PirParamsResponse
+
+    /// Create a Txid PIR client using the synchronizer's lightwalletd connection.
+    public var createTxidPirClient: () -> TxidPirClient?
 }
 

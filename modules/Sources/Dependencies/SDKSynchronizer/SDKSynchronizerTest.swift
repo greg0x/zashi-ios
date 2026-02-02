@@ -76,7 +76,8 @@ extension SDKSynchronizerClient: TestDependencyKey {
         fetchUTXOsByAddress: unimplemented("\(Self.self).fetchUTXOsByAddress", placeholder: .notFound),
         enhanceTransactionBy: unimplemented("\(Self.self).enhanceTransactionBy"),
         createPIRClient: unimplemented("\(Self.self).createPIRClient"),
-        getPirParams: unimplemented("\(Self.self).getPirParams")
+        getPirParams: unimplemented("\(Self.self).getPirParams"),
+        createTxidPirClient: unimplemented("\(Self.self).createTxidPirClient")
     )
 }
 
@@ -130,7 +131,8 @@ extension SDKSynchronizerClient {
         fetchUTXOsByAddress: { _, _ in .notFound },
         enhanceTransactionBy: { _ in },
         createPIRClient: { nil },
-        getPirParams: { fatalError("getPirParams not implemented in noOp") }
+        getPirParams: { fatalError("getPirParams not implemented in noOp") },
+        createTxidPirClient: { nil }
     )
 
     public static let mock = Self.mocked()
@@ -255,7 +257,8 @@ extension SDKSynchronizerClient {
         fetchUTXOsByAddress: @escaping (String, AccountUUID) async throws -> TransparentAddressCheckResult = { _, _ in .notFound },
         enhanceTransactionBy: @escaping (String) async throws -> Void = { _ in },
         createPIRClient: @escaping () -> NullifierPIRClient? = { nil },
-        getPirParams: @escaping () async throws -> PirParamsResponse = { fatalError("getPirParams not implemented in mocked") }
+        getPirParams: @escaping () async throws -> PirParamsResponse = { fatalError("getPirParams not implemented in mocked") },
+        createTxidPirClient: @escaping () -> TxidPirClient? = { nil }
     ) -> SDKSynchronizerClient {
         SDKSynchronizerClient(
             stateStream: stateStream,
@@ -304,7 +307,8 @@ extension SDKSynchronizerClient {
             fetchUTXOsByAddress: fetchUTXOsByAddress,
             enhanceTransactionBy: enhanceTransactionBy,
             createPIRClient: createPIRClient,
-            getPirParams: getPirParams
+            getPirParams: getPirParams,
+            createTxidPirClient: createTxidPirClient
         )
     }
 }
