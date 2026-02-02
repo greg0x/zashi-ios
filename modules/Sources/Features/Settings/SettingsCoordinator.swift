@@ -22,6 +22,7 @@ import ServerSetup
 import SendFeedback
 import WhatsNew
 import TorSetup
+import TxidPirTest
 
 extension Settings {
     public func coordinatorReduce() -> Reduce<Settings.State, Settings.Action> {
@@ -96,6 +97,8 @@ extension Settings {
                     state.path.append(.torSetup(torSetupState))
                 case .pirVerification:
                     state.path.append(.pirVerification(PIRVerification.State.initial))
+                case .txidPirTest:
+                    state.path.append(.txidPirTest(TxidPirTest.State()))
                 case .resetZashi:
                     state.path.append(.resetZashi(DeleteWallet.State.initial))
                 }

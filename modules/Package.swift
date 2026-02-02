@@ -77,6 +77,7 @@ let package = Package(
         .library(name: "ReadTransactionsStorage", targets: ["ReadTransactionsStorage"]),
         .library(name: "TaxExporter", targets: ["TaxExporter"]),
         .library(name: "TorSetup", targets: ["TorSetup"]),
+        .library(name: "TxidPirTest", targets: ["TxidPirTest"]),
         .library(name: "TransactionDetails", targets: ["TransactionDetails"]),
         .library(name: "TransactionList", targets: ["TransactionList"]),
         .library(name: "TransactionsManager", targets: ["TransactionsManager"]),
@@ -564,6 +565,16 @@ let package = Package(
             path: "Sources/Features/PIRVerification"
         ),
         .target(
+            name: "TxidPirTest",
+            dependencies: [
+                "Generated",
+                "UIComponents",
+                .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+                .product(name: "ZcashLightClientKit", package: "zcash-swift-wallet-sdk")
+            ],
+            path: "Sources/Features/TxidPirTest"
+        ),
+        .target(
             name: "Pasteboard",
             dependencies: [
                 "Utils",
@@ -872,6 +883,7 @@ let package = Package(
                 "SDKSynchronizer",
                 "SupportDataGenerator",
                 "TorSetup",
+                "TxidPirTest",
                 "UIComponents",
                 "WalletStorage",
                 "WhatsNew",

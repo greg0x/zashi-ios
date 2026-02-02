@@ -59,10 +59,18 @@ public struct AdvancedSettingsView: View {
 
                         ActionRow(
                             icon: Asset.Assets.Icons.shieldZap.image,
-                            title: L10n.Settings.private,
-                            divider: false
+                            title: L10n.Settings.private
                         ) {
                             store.send(.operationAccessCheck(.torSetup))
+                        }
+
+                        // Txid PIR Test (temporary development UI)
+                        ActionRow(
+                            icon: Asset.Assets.shield.image,
+                            title: "Txid PIR Test",
+                            divider: false
+                        ) {
+                            store.send(.operationAccessCheck(.txidPirTest))
                         }
 
                         // Hidden: nullifier PIR is being replaced with txid PIR

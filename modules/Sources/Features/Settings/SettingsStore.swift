@@ -24,6 +24,7 @@ import ServerSetup
 import SendFeedback
 import WhatsNew
 import TorSetup
+import TxidPirTest
 
 @Reducer
 public struct Settings {
@@ -45,6 +46,7 @@ public struct Settings {
         case scan(Scan)
         case sendUsFeedback(SendFeedback)
         case torSetup(TorSetup)
+        case txidPirTest(TxidPirTest)
         case whatsNew(WhatsNew)
     }
     
