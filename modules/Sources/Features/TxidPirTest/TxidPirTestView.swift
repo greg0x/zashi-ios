@@ -25,6 +25,8 @@ public struct TxidPirTestView: View {
                     configStatusSection
                     statsSection
                     enhancementFeedSection
+                    manualQuerySection
+                    timingSection
                     errorSection
                 }
                 .padding(16)
@@ -187,50 +189,152 @@ public struct TxidPirTestView: View {
         }
     }
 
-    // MARK: - Connection Section
+    // MARK: - Manual Query Section
 
     @ViewBuilder
-    private var connectionSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Connection")
+    private var manualQuerySection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Manual Query Testing")
                 .zFont(.semiBold, size: 16, style: Design.Text.primary)
 
-            // Status
+            // Connection status (read-only)
             HStack {
-                Text("Status:")
+                Text("PIR Client:")
                     .zFont(size: 14, style: Design.Text.tertiary)
                 Spacer()
-                Text(connectionStatusText)
-                    .zFont(.medium, size: 14, style: Design.Text.primary)
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(connectionStatusColor)
+                        .frame(width: 8, height: 8)
+                    Text(connectionStatusText)
+                        .zFont(.medium, size: 13, style: Design.Text.primary)
+                }
             }
 
             // Params info (when loaded)
             if let params = store.txLookupParams {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("TX DB: \(params.txCount) txs, blocks \(params.startHeight)-\(params.endHeight)")
-                        .zFont(size: 12, style: Design.Text.tertiary)
-                    Text("InSPIRe: \(params.inspire.dbRows)x\(params.inspire.dbCols), n=\(params.inspire.polyLen)")
-                        .zFont(size: 12, style: Design.Text.tertiary)
+                        .zFont(size: 11, style: Design.Text.tertiary)
+                    Text("InSPIRe: \(params.inspire.dbRows)×\(params.inspire.dbCols), n=\(params.inspire.polyLen)")
+                        .zFont(size: 11, style: Design.Text.tertiary)
                 }
             }
 
-            // Buttons
-            HStack(spacing: 12) {
-                Button("Connect") {
-                    store.send(.connect)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isConnecting)
+            Divider()
 
-                Button("Precompute Keys") {
-                    store.send(.precomputeKeys)
+            // TX Lookup Query
+            VStack(alignment: .leading, spacing: 8) {
+                Text("TX Lookup")
+                    .zFont(.medium, size: 14, style: Design.Text.primary)
+
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Block Height")
+                            .zFont(size: 11, style: Design.Text.tertiary)
+                        TextField("Block Height", text: $store.blockHeightInput)
+                            .textFieldStyle(.roundedBorder)
+                            .keyboardType(.numberPad)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("TX Index")
+                            .zFont(size: 11, style: Design.Text.tertiary)
+                        TextField("TX Index", text: $store.txIndexInput)
+                            .textFieldStyle(.roundedBorder)
+                            .keyboardType(.numberPad)
+                    }
+
+                    Button("Query") {
+                        store.send(.queryTxLookup)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(store.connectionState != .ready)
                 }
-                .buttonStyle(.bordered)
-                .disabled(store.connectionState != .paramsLoaded)
+
+                if store.txLookupQueried {
+                    if let result = store.txLookupResult {
+                        HStack {
+                            Text("✓ Found: startIndex=\(result.startIndex), actions=\(result.actionCount)")
+                                .zFont(size: 12, style: Design.Text.secondary)
+                            Spacer()
+                            Button("Use ↓") {
+                                store.send(.fillActionDataFromResult)
+                            }
+                            .font(.caption)
+                        }
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.green.opacity(0.1)))
+                    } else {
+                        Text("✗ Not Found (tx not in PIR database)")
+                            .zFont(size: 12, style: Design.Text.secondary)
+                            .padding(8)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.red.opacity(0.1)))
+                    }
+                }
+            }
+
+            Divider()
+
+            // Action Data Query
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Action Data")
+                    .zFont(.medium, size: 14, style: Design.Text.primary)
+
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Start Index")
+                            .zFont(size: 11, style: Design.Text.tertiary)
+                        TextField("Start Index", text: $store.startIndexInput)
+                            .textFieldStyle(.roundedBorder)
+                            .keyboardType(.numberPad)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Count")
+                            .zFont(size: 11, style: Design.Text.tertiary)
+                        TextField("Count", text: $store.actionCountInput)
+                            .textFieldStyle(.roundedBorder)
+                            .keyboardType(.numberPad)
+                    }
+
+                    Button("Query") {
+                        store.send(.queryActionData)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(store.connectionState != .ready)
+                }
+
+                if !store.actionDataResult.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Retrieved \(store.actionDataResult.count) actions")
+                            .zFont(size: 12, style: Design.Text.secondary)
+                        ForEach(store.actionDataResult.prefix(2)) { action in
+                            Text("cv: \(action.cvHex)")
+                                .zFont(size: 10, style: Design.Text.tertiary)
+                                .lineLimit(1)
+                        }
+                        if store.actionDataResult.count > 2 {
+                            Text("... and \(store.actionDataResult.count - 2) more")
+                                .zFont(size: 10, style: Design.Text.tertiary)
+                        }
+                    }
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.green.opacity(0.1)))
+                }
             }
         }
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color(.systemGray6)))
+    }
+
+    private var connectionStatusColor: Color {
+        switch store.connectionState {
+        case .ready: return .green
+        case .connecting, .paramsLoaded, .precomputing: return .orange
+        case .disconnected: return .gray
+        case .error: return .red
+        }
     }
 
     // MARK: - TX Lookup Section

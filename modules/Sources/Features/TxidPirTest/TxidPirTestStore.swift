@@ -34,6 +34,7 @@ public struct TxidPirTest {
 
         // Results
         public var txLookupResult: TxLookupResultDisplay?
+        public var txLookupQueried: Bool = false  // true after query completes (to distinguish nil=not found vs nil=not queried)
         public var actionDataResult: [ActionDataDisplay] = []
 
         // Timing
@@ -114,7 +115,10 @@ public struct TxidPirTest {
                 return .none
 
             case .onAppear:
-                return .send(.startEventStream)
+                return .merge(
+                    .send(.startEventStream),
+                    .send(.connect)
+                )
 
             case .onDisappear:
                 return .run { [sdkSynchronizer] _ in
@@ -153,7 +157,8 @@ public struct TxidPirTest {
                 state.connectionState = .paramsLoaded
                 state.txLookupParams = txParams
                 state.actionDataParams = actionParams
-                return .none
+                // Auto-precompute keys after connecting
+                return .send(.precomputeKeys)
 
             case .connectionFailed(let error):
                 state.connectionState = .error(error)
@@ -203,6 +208,7 @@ public struct TxidPirTest {
 
                 state.errorMessage = nil
                 state.txLookupResult = nil
+                state.txLookupQueried = false
 
                 return .run { [sdkSynchronizer] send in
                     do {
@@ -240,6 +246,7 @@ public struct TxidPirTest {
 
             case .txLookupCompleted(let result, let timing):
                 state.txLookupResult = result
+                state.txLookupQueried = true
                 state.lastQueryTiming = timing
                 return .none
 
