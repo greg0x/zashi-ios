@@ -92,7 +92,8 @@ public struct WalletBalances {
         /// Number of blocks behind when PIR verification started
         public var pirBlocksBehind: Int = 0
         /// Whether PIR verification is enabled (can be toggled in settings)
-        public var isPIREnabled: Bool = true
+        /// Disabled: nullifier PIR is being replaced with txid PIR
+        public var isPIREnabled: Bool = false
         /// Threshold: trigger PIR automatically when this many blocks behind
         /// Set relatively low to make testing easier; can increase for production
         public static let pirBlocksThreshold: Int = 50
@@ -154,9 +155,9 @@ public struct WalletBalances {
             self.transparentBalance = transparentBalance
             
             // Load PIR settings from UserDefaults
-            // Default to enabled if not set (opt-out model)
+            // Default to disabled - nullifier PIR is being replaced with txid PIR
             let defaults = UserDefaults.standard
-            self.isPIREnabled = defaults.object(forKey: PIRUserDefaultsKeys.balanceVerificationEnabled) as? Bool ?? true
+            self.isPIREnabled = defaults.object(forKey: PIRUserDefaultsKeys.balanceVerificationEnabled) as? Bool ?? false
         }
     }
     

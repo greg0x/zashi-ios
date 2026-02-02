@@ -59,18 +59,20 @@ public struct AdvancedSettingsView: View {
 
                         ActionRow(
                             icon: Asset.Assets.Icons.shieldZap.image,
-                            title: L10n.Settings.private
+                            title: L10n.Settings.private,
+                            divider: false
                         ) {
                             store.send(.operationAccessCheck(.torSetup))
                         }
-                        
-                        ActionRow(
-                            icon: Asset.Assets.shield.image,
-                            title: "Private Balance Check",
-                            divider: false
-                        ) {
-                            store.send(.operationAccessCheck(.pirVerification))
-                        }
+
+                        // Hidden: nullifier PIR is being replaced with txid PIR
+                        // ActionRow(
+                        //     icon: Asset.Assets.shield.image,
+                        //     title: "Private Balance Check",
+                        //     divider: false
+                        // ) {
+                        //     store.send(.operationAccessCheck(.pirVerification))
+                        // }
                     }
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Asset.Colors.shade97.color)
