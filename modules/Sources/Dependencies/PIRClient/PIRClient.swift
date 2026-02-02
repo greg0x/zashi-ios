@@ -217,13 +217,9 @@ extension PIRClient: DependencyKey {
                 try await provider.checkNullifiers(nullifiers)
             },
             getUnspentNullifiers: { dataDbURL, networkType in
-                print("📖 PIRClient: Getting unspent nullifiers from wallet...")
-                let nullifiers = try WalletNullifiers.getUnspentNullifiers(
-                    dataDbURL: dataDbURL,
-                    networkType: networkType
-                )
-                print("📖 PIRClient: Found \(nullifiers.count) unspent nullifiers")
-                return nullifiers
+                // WalletNullifiers FFI not available - nullifier PIR disabled
+                print("📖 PIRClient: Nullifier PIR not available (FFI disabled)")
+                return []
             },
             disconnect: {
                 provider.disconnect()

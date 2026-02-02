@@ -102,17 +102,13 @@ public struct TxidPirTest {
             // MARK: - Connection
 
             case .connect:
-                guard let url = URL(string: state.serverURL) else {
-                    state.errorMessage = "Invalid server URL"
-                    return .none
-                }
-
                 state.connectionState = .connecting
                 state.errorMessage = nil
 
                 return .run { send in
                     do {
-                        try await txidPirClient.connect(serverURL: url)
+                        // Note: connect() now uses gRPC via lightwalletd (no serverURL needed)
+                        try await txidPirClient.connect()
                         if let txParams = await txidPirClient.txLookupParams,
                            let actionParams = await txidPirClient.actionDataParams {
                             await send(.connectionSucceeded(txParams, actionParams))
