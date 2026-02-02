@@ -77,7 +77,7 @@ extension SDKSynchronizerClient: TestDependencyKey {
         enhanceTransactionBy: unimplemented("\(Self.self).enhanceTransactionBy"),
         createPIRClient: unimplemented("\(Self.self).createPIRClient"),
         getPirParams: unimplemented("\(Self.self).getPirParams"),
-        createTxidPirClient: unimplemented("\(Self.self).createTxidPirClient")
+        getTxidPirClient: unimplemented("\(Self.self).getTxidPirClient")
     )
 }
 
@@ -132,7 +132,7 @@ extension SDKSynchronizerClient {
         enhanceTransactionBy: { _ in },
         createPIRClient: { nil },
         getPirParams: { fatalError("getPirParams not implemented in noOp") },
-        createTxidPirClient: { nil }
+        getTxidPirClient: { nil }
     )
 
     public static let mock = Self.mocked()
@@ -258,7 +258,7 @@ extension SDKSynchronizerClient {
         enhanceTransactionBy: @escaping (String) async throws -> Void = { _ in },
         createPIRClient: @escaping () -> NullifierPIRClient? = { nil },
         getPirParams: @escaping () async throws -> PirParamsResponse = { fatalError("getPirParams not implemented in mocked") },
-        createTxidPirClient: @escaping () -> TxidPirClient? = { nil }
+        getTxidPirClient: @escaping () -> TxidPirClient? = { nil }
     ) -> SDKSynchronizerClient {
         SDKSynchronizerClient(
             stateStream: stateStream,
@@ -308,7 +308,7 @@ extension SDKSynchronizerClient {
             enhanceTransactionBy: enhanceTransactionBy,
             createPIRClient: createPIRClient,
             getPirParams: getPirParams,
-            createTxidPirClient: createTxidPirClient
+            getTxidPirClient: getTxidPirClient
         )
     }
 }

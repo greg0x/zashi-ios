@@ -121,11 +121,8 @@ public struct TxidPirTest {
                 )
 
             case .onDisappear:
-                return .run { [sdkSynchronizer] _ in
-                    if let client = sharedTxidPirClientHolder.getOrCreate(from: sdkSynchronizer) {
-                        await client.disconnect()
-                    }
-                }
+                // Don't disconnect - the shared client is used by BlockEnhancer
+                return .cancel(id: CancelID.pirOperation)
 
             // MARK: - Connection
 
@@ -135,7 +132,7 @@ public struct TxidPirTest {
 
                 return .run { [sdkSynchronizer] send in
                     do {
-                        guard let client = sharedTxidPirClientHolder.getOrCreate(from: sdkSynchronizer) else {
+                        guard let client = sdkSynchronizer.getTxidPirClient() else {
                             await send(.connectionFailed("Failed to create PIR client - synchronizer not ready"))
                             return
                         }
@@ -171,7 +168,7 @@ public struct TxidPirTest {
 
                 return .run { [sdkSynchronizer] send in
                     do {
-                        guard let client = sharedTxidPirClientHolder.getOrCreate(from: sdkSynchronizer) else {
+                        guard let client = sdkSynchronizer.getTxidPirClient() else {
                             await send(.keysFailed("PIR client not available"))
                             return
                         }
@@ -212,7 +209,7 @@ public struct TxidPirTest {
 
                 return .run { [sdkSynchronizer] send in
                     do {
-                        guard let client = sharedTxidPirClientHolder.getOrCreate(from: sdkSynchronizer) else {
+                        guard let client = sdkSynchronizer.getTxidPirClient() else {
                             await send(.txLookupFailed("PIR client not available"))
                             return
                         }
@@ -273,7 +270,7 @@ public struct TxidPirTest {
 
                 return .run { [sdkSynchronizer] send in
                     do {
-                        guard let client = sharedTxidPirClientHolder.getOrCreate(from: sdkSynchronizer) else {
+                        guard let client = sdkSynchronizer.getTxidPirClient() else {
                             await send(.actionDataFailed("PIR client not available"))
                             return
                         }
@@ -428,27 +425,3 @@ extension Data {
     }
 }
 
-// MARK: - Dependency
-
-/// Shared TxidPirClient instance - created lazily from SDKSynchronizer
-private final class TxidPirClientHolder: @unchecked Sendable {
-    private var _client: TxidPirClient?
-    private let lock = NSLock()
-
-    func getOrCreate(from sdkSynchronizer: SDKSynchronizerClient) -> TxidPirClient? {
-        lock.lock()
-        defer { lock.unlock() }
-        if _client == nil {
-            _client = sdkSynchronizer.createTxidPirClient()
-        }
-        return _client
-    }
-
-    func clear() {
-        lock.lock()
-        defer { lock.unlock() }
-        _client = nil
-    }
-}
-
-private let sharedTxidPirClientHolder = TxidPirClientHolder()

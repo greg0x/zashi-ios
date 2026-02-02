@@ -108,7 +108,7 @@ public struct SDKSynchronizerClient {
     /// Get PIR parameters from lightwalletd.
     public var getPirParams: () async throws -> PirParamsResponse
 
-    /// Create a Txid PIR client using the synchronizer's lightwalletd connection.
-    public var createTxidPirClient: () -> TxidPirClient?
+    /// Get the shared Txid PIR client used by BlockEnhancer.
+    public var getTxidPirClient: () -> TxidPirClient?
 }
 
