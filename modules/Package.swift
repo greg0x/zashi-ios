@@ -95,6 +95,7 @@ let package = Package(
         .library(name: "Welcome", targets: ["Welcome"]),
         .library(name: "WhatsNew", targets: ["WhatsNew"]),
         .library(name: "WhatsNewProvider", targets: ["WhatsNewProvider"]),
+        .library(name: "WitnessDemo", targets: ["WitnessDemo"]),
         .library(name: "ZcashSDKEnvironment", targets: ["ZcashSDKEnvironment"]),
         .library(name: "ZecKeyboard", targets: ["ZecKeyboard"])
     ],
@@ -576,6 +577,17 @@ let package = Package(
             path: "Sources/Features/TxidPirTest"
         ),
         .target(
+            name: "WitnessDemo",
+            dependencies: [
+                "Generated",
+                "SDKSynchronizer",
+                "UIComponents",
+                .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+                .product(name: "ZcashLightClientKit", package: "zcash-swift-wallet-sdk")
+            ],
+            path: "Sources/Features/WitnessDemo"
+        ),
+        .target(
             name: "Pasteboard",
             dependencies: [
                 "Utils",
@@ -888,6 +900,7 @@ let package = Package(
                 "UIComponents",
                 "WalletStorage",
                 "WhatsNew",
+                "WitnessDemo",
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "ZcashLightClientKit", package: "zcash-swift-wallet-sdk"),
                 .product(name: "Flexa", package: "flexa-ios")

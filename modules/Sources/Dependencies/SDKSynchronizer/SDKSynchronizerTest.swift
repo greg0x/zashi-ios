@@ -77,7 +77,9 @@ extension SDKSynchronizerClient: TestDependencyKey {
         enhanceTransactionBy: unimplemented("\(Self.self).enhanceTransactionBy"),
         createPIRClient: unimplemented("\(Self.self).createPIRClient"),
         getPirParams: unimplemented("\(Self.self).getPirParams"),
-        getTxidPirClient: unimplemented("\(Self.self).getTxidPirClient")
+        getTxidPirClient: unimplemented("\(Self.self).getTxidPirClient"),
+        listOrchardNotes: unimplemented("\(Self.self).listOrchardNotes", placeholder: Data()),
+        getOrchardWitnessAtHeight: unimplemented("\(Self.self).getOrchardWitnessAtHeight", placeholder: Data())
     )
 }
 
@@ -132,7 +134,9 @@ extension SDKSynchronizerClient {
         enhanceTransactionBy: { _ in },
         createPIRClient: { nil },
         getPirParams: { fatalError("getPirParams not implemented in noOp") },
-        getTxidPirClient: { nil }
+        getTxidPirClient: { nil },
+        listOrchardNotes: { Data() },
+        getOrchardWitnessAtHeight: { _, _ in Data() }
     )
 
     public static let mock = Self.mocked()
@@ -258,7 +262,9 @@ extension SDKSynchronizerClient {
         enhanceTransactionBy: @escaping (String) async throws -> Void = { _ in },
         createPIRClient: @escaping () -> NullifierPIRClient? = { nil },
         getPirParams: @escaping () async throws -> PirParamsResponse = { fatalError("getPirParams not implemented in mocked") },
-        getTxidPirClient: @escaping () -> TxidPirClient? = { nil }
+        getTxidPirClient: @escaping () -> TxidPirClient? = { nil },
+        listOrchardNotes: @escaping () async throws -> Data = { Data() },
+        getOrchardWitnessAtHeight: @escaping (UInt64, BlockHeight) async throws -> Data = { _, _ in Data() }
     ) -> SDKSynchronizerClient {
         SDKSynchronizerClient(
             stateStream: stateStream,
@@ -308,7 +314,9 @@ extension SDKSynchronizerClient {
             enhanceTransactionBy: enhanceTransactionBy,
             createPIRClient: createPIRClient,
             getPirParams: getPirParams,
-            getTxidPirClient: getTxidPirClient
+            getTxidPirClient: getTxidPirClient,
+            listOrchardNotes: listOrchardNotes,
+            getOrchardWitnessAtHeight: getOrchardWitnessAtHeight
         )
     }
 }

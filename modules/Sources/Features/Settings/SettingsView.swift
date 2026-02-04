@@ -19,6 +19,7 @@ import SendFeedback
 import WhatsNew
 import TorSetup
 import TxidPirTest
+import WitnessDemo
 
 public struct SettingsView: View {
     @Environment(\.colorScheme) var colorScheme
@@ -144,6 +145,8 @@ public struct SettingsView: View {
                     TxidPirTestView(store: store)
                 case let .whatsNew(store):
                     WhatsNewView(store: store)
+                case let .witnessDemo(store):
+                    WitnessDemoView(store: store)
                 }
             }
             .applyScreenBackground()

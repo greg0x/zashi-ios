@@ -333,6 +333,15 @@ extension SDKSynchronizerClient: DependencyKey {
             },
             getTxidPirClient: {
                 synchronizer.getTxidPirClient()
+            },
+            listOrchardNotes: {
+                try await synchronizer.listOrchardNotes()
+            },
+            getOrchardWitnessAtHeight: { notePosition, checkpointHeight in
+                try await synchronizer.getOrchardWitnessAtHeight(
+                    notePosition: notePosition,
+                    checkpointHeight: checkpointHeight
+                )
             }
         )
     }

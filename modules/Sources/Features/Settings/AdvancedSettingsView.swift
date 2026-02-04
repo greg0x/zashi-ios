@@ -67,10 +67,18 @@ public struct AdvancedSettingsView: View {
                         // Txid PIR Test (temporary development UI)
                         ActionRow(
                             icon: Asset.Assets.shield.image,
-                            title: "Txid PIR Test",
-                            divider: false
+                            title: "Txid PIR Test"
                         ) {
                             store.send(.operationAccessCheck(.txidPirTest))
+                        }
+
+                        // Witness Demo (voting proposal verification)
+                        ActionRow(
+                            icon: Asset.Assets.shield.image,
+                            title: "Witness Demo",
+                            divider: false
+                        ) {
+                            store.send(.operationAccessCheck(.witnessDemo))
                         }
 
                         // Hidden: nullifier PIR is being replaced with txid PIR

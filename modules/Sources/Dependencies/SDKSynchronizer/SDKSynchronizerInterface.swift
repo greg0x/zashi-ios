@@ -110,5 +110,13 @@ public struct SDKSynchronizerClient {
 
     /// Get the shared Txid PIR client used by BlockEnhancer.
     public var getTxidPirClient: () -> TxidPirClient?
+
+    // MARK: - Witness Demo (Voting Proposal Verification)
+
+    /// List all Orchard notes with their commitment tree positions.
+    public var listOrchardNotes: () async throws -> Data
+
+    /// Get a Merkle witness for an Orchard note at a specific checkpoint height.
+    public var getOrchardWitnessAtHeight: (_ notePosition: UInt64, _ checkpointHeight: BlockHeight) async throws -> Data
 }
 

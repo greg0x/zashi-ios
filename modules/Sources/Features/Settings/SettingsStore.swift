@@ -25,6 +25,7 @@ import SendFeedback
 import WhatsNew
 import TorSetup
 import TxidPirTest
+import WitnessDemo
 
 @Reducer
 public struct Settings {
@@ -48,6 +49,7 @@ public struct Settings {
         case torSetup(TorSetup)
         case txidPirTest(TxidPirTest)
         case whatsNew(WhatsNew)
+        case witnessDemo(WitnessDemo)
     }
     
     @ObservableState
