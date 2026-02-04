@@ -176,23 +176,23 @@ public struct WitnessDemo {
 private func parseOrchardNotes(from data: Data) -> [OrchardNoteDisplay] {
     guard data.count >= 4 else { return [] }
 
-    let count = data.withUnsafeBytes { $0.load(as: UInt32.self) }
+    let count = data.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
     var notes: [OrchardNoteDisplay] = []
     var offset = 4
 
     for _ in 0..<count {
         guard offset + 28 <= data.count else { break }
 
-        let noteId = data.withUnsafeBytes { $0.load(fromByteOffset: offset, as: Int64.self) }
+        let noteId = data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: Int64.self) }
         offset += 8
 
-        let position = data.withUnsafeBytes { $0.load(fromByteOffset: offset, as: UInt64.self) }
+        let position = data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt64.self) }
         offset += 8
 
-        let value = data.withUnsafeBytes { $0.load(fromByteOffset: offset, as: UInt64.self) }
+        let value = data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt64.self) }
         offset += 8
 
-        let minedHeight = data.withUnsafeBytes { $0.load(fromByteOffset: offset, as: UInt32.self) }
+        let minedHeight = data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt32.self) }
         offset += 4
 
         notes.append(OrchardNoteDisplay(
@@ -219,12 +219,12 @@ private func parseWitnessResult(from data: Data, timingMs: Double) -> WitnessRes
         )
     }
 
-    let position = data.withUnsafeBytes { $0.load(as: UInt64.self) }
+    let position = data.withUnsafeBytes { $0.loadUnaligned(as: UInt64.self) }
 
     let rootData = data.subdata(in: 8..<40)
     let rootHex = rootData.map { String(format: "%02x", $0) }.joined()
 
-    let pathLength = data.withUnsafeBytes { $0.load(fromByteOffset: 40, as: UInt32.self) }
+    let pathLength = data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 40, as: UInt32.self) }
 
     // Show first 2 path elements as preview
     var authPathPreview = ""
