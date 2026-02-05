@@ -152,7 +152,7 @@ public struct WitnessDemo {
                         var expectedRootHex: String?
                         var rootsMatch: Bool?
                         do {
-                            let expectedRoot = try await sdkSynchronizer.getOrchardTreeRoot(at: BlockHeight(checkpointHeight))
+                            let expectedRoot = try await sdkSynchronizer.getOrchardTreeRoot(BlockHeight(checkpointHeight))
                             expectedRootHex = expectedRoot.map { String(format: "%02x", $0) }.joined()
                             // Compare with witness root (bytes 8-39)
                             if data.count >= 40 {
