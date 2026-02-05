@@ -211,6 +211,11 @@ public struct WitnessDemoView: View {
 
                 Divider()
 
+                // Verification section
+                verificationSection(result)
+
+                Divider()
+
                 Text("This witness proves the note existed at the checkpoint height. The root can be compared against a publicly committed snapshot root for voting eligibility verification.")
                     .zFont(size: 11, style: Design.Text.tertiary)
                     .italic()
@@ -228,6 +233,36 @@ public struct WitnessDemoView: View {
             Spacer()
             Text(value)
                 .zFont(.medium, size: 13, style: Design.Text.primary)
+        }
+    }
+
+    @ViewBuilder
+    private func verificationSection(_ result: WitnessResultDisplay) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                if let rootsMatch = result.rootsMatch {
+                    Image(systemName: rootsMatch ? "checkmark.seal.fill" : "xmark.seal.fill")
+                        .foregroundColor(rootsMatch ? .green : .red)
+                    Text(rootsMatch ? "Root Verified ✓" : "Root Mismatch ✗")
+                        .zFont(.semiBold, size: 14, style: Design.Text.primary)
+                } else {
+                    Image(systemName: "questionmark.circle")
+                        .foregroundColor(.orange)
+                    Text("Verification Pending")
+                        .zFont(.semiBold, size: 14, style: Design.Text.primary)
+                }
+            }
+
+            if let expectedRoot = result.expectedRootHex {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Expected Root (from lightwalletd)")
+                        .zFont(size: 12, style: Design.Text.tertiary)
+                    Text(expectedRoot)
+                        .zFont(size: 10, style: Design.Text.secondary)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                }
+            }
         }
     }
 

@@ -342,6 +342,9 @@ extension SDKSynchronizerClient: DependencyKey {
                     notePosition: notePosition,
                     checkpointHeight: checkpointHeight
                 )
+            },
+            getOrchardTreeRoot: { height in
+                try await synchronizer.getOrchardTreeRoot(at: height)
             }
         )
     }

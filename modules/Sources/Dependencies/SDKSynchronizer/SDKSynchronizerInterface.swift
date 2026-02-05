@@ -118,5 +118,8 @@ public struct SDKSynchronizerClient {
 
     /// Get a Merkle witness for an Orchard note at a specific checkpoint height.
     public var getOrchardWitnessAtHeight: (_ notePosition: UInt64, _ checkpointHeight: BlockHeight) async throws -> Data
+
+    /// Get the expected Orchard tree root at a specific block height from lightwalletd.
+    public var getOrchardTreeRoot: (_ height: BlockHeight) async throws -> Data
 }
 

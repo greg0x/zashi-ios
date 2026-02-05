@@ -79,7 +79,8 @@ extension SDKSynchronizerClient: TestDependencyKey {
         getPirParams: unimplemented("\(Self.self).getPirParams"),
         getTxidPirClient: unimplemented("\(Self.self).getTxidPirClient"),
         listOrchardNotes: unimplemented("\(Self.self).listOrchardNotes", placeholder: Data()),
-        getOrchardWitnessAtHeight: unimplemented("\(Self.self).getOrchardWitnessAtHeight", placeholder: Data())
+        getOrchardWitnessAtHeight: unimplemented("\(Self.self).getOrchardWitnessAtHeight", placeholder: Data()),
+        getOrchardTreeRoot: unimplemented("\(Self.self).getOrchardTreeRoot", placeholder: Data())
     )
 }
 
@@ -136,7 +137,8 @@ extension SDKSynchronizerClient {
         getPirParams: { fatalError("getPirParams not implemented in noOp") },
         getTxidPirClient: { nil },
         listOrchardNotes: { Data() },
-        getOrchardWitnessAtHeight: { _, _ in Data() }
+        getOrchardWitnessAtHeight: { _, _ in Data() },
+        getOrchardTreeRoot: { _ in Data() }
     )
 
     public static let mock = Self.mocked()
@@ -264,7 +266,8 @@ extension SDKSynchronizerClient {
         getPirParams: @escaping () async throws -> PirParamsResponse = { fatalError("getPirParams not implemented in mocked") },
         getTxidPirClient: @escaping () -> TxidPirClient? = { nil },
         listOrchardNotes: @escaping () async throws -> Data = { Data() },
-        getOrchardWitnessAtHeight: @escaping (UInt64, BlockHeight) async throws -> Data = { _, _ in Data() }
+        getOrchardWitnessAtHeight: @escaping (UInt64, BlockHeight) async throws -> Data = { _, _ in Data() },
+        getOrchardTreeRoot: @escaping (BlockHeight) async throws -> Data = { _ in Data() }
     ) -> SDKSynchronizerClient {
         SDKSynchronizerClient(
             stateStream: stateStream,
@@ -316,7 +319,8 @@ extension SDKSynchronizerClient {
             getPirParams: getPirParams,
             getTxidPirClient: getTxidPirClient,
             listOrchardNotes: listOrchardNotes,
-            getOrchardWitnessAtHeight: getOrchardWitnessAtHeight
+            getOrchardWitnessAtHeight: getOrchardWitnessAtHeight,
+            getOrchardTreeRoot: getOrchardTreeRoot
         )
     }
 }
