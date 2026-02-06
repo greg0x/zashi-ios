@@ -148,7 +148,10 @@ public struct WitnessDemo {
                         )
                         let elapsed = Date().timeIntervalSince(startTime) * 1000
 
-                        let result = parseWitnessResult(from: data, timingMs: elapsed)
+                        // Verify the witness by recomputing the Merkle root
+                        let isValid = try await sdkSynchronizer.verifyOrchardWitness(data)
+
+                        let result = parseWitnessResult(from: data, timingMs: elapsed, isVerified: isValid)
                         await send(.witnessGenerated(result))
                     } catch {
                         await send(.witnessFailed(error.localizedDescription))
@@ -214,30 +217,39 @@ private func parseOrchardNotes(from data: Data) -> [OrchardNoteDisplay] {
 }
 
 /// Parse the serialized witness result from FFI.
-/// Format: position (8) + root (32) + path_len (4) + auth_path (32*32)
-private func parseWitnessResult(from data: Data, timingMs: Double) -> WitnessResultDisplay {
-    guard data.count >= 44 else {
+/// Format (1100 bytes): note_commitment (32) + position (8) + root (32) + path_len (4) + auth_path (32*32)
+private func parseWitnessResult(from data: Data, timingMs: Double, isVerified: Bool = false) -> WitnessResultDisplay {
+    guard data.count >= 76 else {
         return WitnessResultDisplay(
+            noteCommitmentHex: "invalid",
             position: 0,
             rootHex: "invalid",
             pathLength: 0,
             authPathPreview: "invalid",
-            timingMs: timingMs
+            timingMs: timingMs,
+            isVerified: isVerified
         )
     }
 
-    let position = data.withUnsafeBytes { $0.loadUnaligned(as: UInt64.self) }
+    // Parse note commitment (bytes 0-31)
+    let commitmentData = data.subdata(in: 0..<32)
+    let commitmentHex = commitmentData.map { String(format: "%02x", $0) }.joined()
 
-    let rootData = data.subdata(in: 8..<40)
+    // Parse position (bytes 32-39)
+    let position = data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 32, as: UInt64.self) }
+
+    // Parse root (bytes 40-71)
+    let rootData = data.subdata(in: 40..<72)
     let rootHex = rootData.map { String(format: "%02x", $0) }.joined()
 
-    let pathLength = data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 40, as: UInt32.self) }
+    // Parse path length (bytes 72-75)
+    let pathLength = data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 72, as: UInt32.self) }
 
-    // Show first 2 path elements as preview
+    // Show first 2 path elements as preview (auth path starts at byte 76)
     var authPathPreview = ""
-    if data.count >= 108 { // 44 + 64 (2 elements)
-        let firstElement = data.subdata(in: 44..<76)
-        let secondElement = data.subdata(in: 76..<108)
+    if data.count >= 140 { // 76 + 64 (2 elements)
+        let firstElement = data.subdata(in: 76..<108)
+        let secondElement = data.subdata(in: 108..<140)
         authPathPreview = firstElement.prefix(8).map { String(format: "%02x", $0) }.joined()
             + "... "
             + secondElement.prefix(8).map { String(format: "%02x", $0) }.joined()
@@ -245,11 +257,13 @@ private func parseWitnessResult(from data: Data, timingMs: Double) -> WitnessRes
     }
 
     return WitnessResultDisplay(
+        noteCommitmentHex: commitmentHex,
         position: position,
         rootHex: rootHex,
         pathLength: pathLength,
         authPathPreview: authPathPreview,
-        timingMs: timingMs
+        timingMs: timingMs,
+        isVerified: isVerified
     )
 }
 
@@ -268,9 +282,11 @@ public struct OrchardNoteDisplay: Equatable, Identifiable {
 }
 
 public struct WitnessResultDisplay: Equatable {
+    public let noteCommitmentHex: String
     public let position: UInt64
     public let rootHex: String
     public let pathLength: UInt32
     public let authPathPreview: String
     public let timingMs: Double
+    public let isVerified: Bool
 }

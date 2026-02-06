@@ -345,6 +345,9 @@ extension SDKSynchronizerClient: DependencyKey {
             },
             getOrchardTreeRoot: { height in
                 try await synchronizer.getOrchardTreeRoot(at: height)
+            },
+            verifyOrchardWitness: { witnessData in
+                try await synchronizer.verifyOrchardWitness(witnessData: witnessData)
             }
         )
     }

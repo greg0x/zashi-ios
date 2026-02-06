@@ -80,7 +80,8 @@ extension SDKSynchronizerClient: TestDependencyKey {
         getTxidPirClient: unimplemented("\(Self.self).getTxidPirClient"),
         listOrchardNotes: unimplemented("\(Self.self).listOrchardNotes", placeholder: Data()),
         getOrchardWitnessAtHeight: unimplemented("\(Self.self).getOrchardWitnessAtHeight", placeholder: Data()),
-        getOrchardTreeRoot: unimplemented("\(Self.self).getOrchardTreeRoot", placeholder: Data())
+        getOrchardTreeRoot: unimplemented("\(Self.self).getOrchardTreeRoot", placeholder: Data()),
+        verifyOrchardWitness: unimplemented("\(Self.self).verifyOrchardWitness", placeholder: false)
     )
 }
 
@@ -138,7 +139,8 @@ extension SDKSynchronizerClient {
         getTxidPirClient: { nil },
         listOrchardNotes: { Data() },
         getOrchardWitnessAtHeight: { _, _ in Data() },
-        getOrchardTreeRoot: { _ in Data() }
+        getOrchardTreeRoot: { _ in Data() },
+        verifyOrchardWitness: { _ in false }
     )
 
     public static let mock = Self.mocked()
@@ -267,7 +269,8 @@ extension SDKSynchronizerClient {
         getTxidPirClient: @escaping () -> TxidPirClient? = { nil },
         listOrchardNotes: @escaping () async throws -> Data = { Data() },
         getOrchardWitnessAtHeight: @escaping (UInt64, BlockHeight) async throws -> Data = { _, _ in Data() },
-        getOrchardTreeRoot: @escaping (BlockHeight) async throws -> Data = { _ in Data() }
+        getOrchardTreeRoot: @escaping (BlockHeight) async throws -> Data = { _ in Data() },
+        verifyOrchardWitness: @escaping (Data) async throws -> Bool = { _ in false }
     ) -> SDKSynchronizerClient {
         SDKSynchronizerClient(
             stateStream: stateStream,
@@ -320,7 +323,8 @@ extension SDKSynchronizerClient {
             getTxidPirClient: getTxidPirClient,
             listOrchardNotes: listOrchardNotes,
             getOrchardWitnessAtHeight: getOrchardWitnessAtHeight,
-            getOrchardTreeRoot: getOrchardTreeRoot
+            getOrchardTreeRoot: getOrchardTreeRoot,
+            verifyOrchardWitness: verifyOrchardWitness
         )
     }
 }

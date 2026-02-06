@@ -121,5 +121,8 @@ public struct SDKSynchronizerClient {
 
     /// Get the expected Orchard tree root at a specific block height from lightwalletd.
     public var getOrchardTreeRoot: (_ height: BlockHeight) async throws -> Data
+
+    /// Verify an Orchard witness by recomputing the Merkle root.
+    public var verifyOrchardWitness: (_ witnessData: Data) async throws -> Bool
 }
 

@@ -176,43 +176,69 @@ public struct WitnessDemoView: View {
     @ViewBuilder
     private var resultSection: some View {
         if let result = store.witnessResult {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                    Text("Witness Generated")
-                        .zFont(.semiBold, size: 16, style: Design.Text.primary)
-                }
+            VStack(alignment: .leading, spacing: 16) {
+                // Witness generation result
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("Witness Generated")
+                            .zFont(.semiBold, size: 16, style: Design.Text.primary)
+                    }
 
-                Group {
-                    resultRow("Position", "\(result.position)")
-                    resultRow("Path Length", "\(result.pathLength) (Orchard tree depth)")
-                    resultRow("Time", String(format: "%.1f ms", result.timingMs))
-                }
+                    Group {
+                        resultRow("Position", "\(result.position)")
+                        resultRow("Path Length", "\(result.pathLength) (Orchard tree depth)")
+                        resultRow("Time", String(format: "%.1f ms", result.timingMs))
+                    }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Tree Root at Snapshot")
-                        .zFont(size: 12, style: Design.Text.tertiary)
-                    Text(result.rootHex)
-                        .font(.system(size: 9, design: .monospaced))
-                        .lineLimit(2)
-                        .textSelection(.enabled)
-                }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Note Commitment (leaf)")
+                            .zFont(size: 12, style: Design.Text.tertiary)
+                        Text(result.noteCommitmentHex)
+                            .font(.system(size: 9, design: .monospaced))
+                            .lineLimit(2)
+                            .textSelection(.enabled)
+                    }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Auth Path Preview")
-                        .zFont(size: 12, style: Design.Text.tertiary)
-                    Text(result.authPathPreview)
-                        .zFont(size: 10, style: Design.Text.secondary)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Tree Root at Snapshot")
+                            .zFont(size: 12, style: Design.Text.tertiary)
+                        Text(result.rootHex)
+                            .font(.system(size: 9, design: .monospaced))
+                            .lineLimit(2)
+                            .textSelection(.enabled)
+                    }
                 }
+                .padding(16)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.green.opacity(0.1)))
 
-                Text("This Merkle proof can be used to prove the note existed at the snapshot height. For voting, a verifier would check that the auth path hashes to the publicly committed snapshot root.")
-                    .zFont(size: 11, style: Design.Text.tertiary)
-                    .padding(.top, 4)
+                // Verification result
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(result.isVerified ? Color.blue : Color.red)
+                                .frame(width: 44, height: 44)
+                            Image(systemName: result.isVerified ? "checkmark" : "xmark")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(result.isVerified ? "Merkle Proof Verified" : "Verification Failed")
+                                .zFont(.semiBold, size: 16, style: Design.Text.primary)
+                            Text("Recomputed root from commitment + auth path")
+                                .zFont(size: 12, style: Design.Text.tertiary)
+                        }
+                    }
+
+                    Text("The Merkle path was verified by hashing the note commitment up through the auth path siblings. This is exactly what the ZKP circuit will do to prove the note existed at the snapshot height.")
+                        .zFont(size: 11, style: Design.Text.tertiary)
+                }
+                .padding(16)
+                .background(RoundedRectangle(cornerRadius: 12).fill(result.isVerified ? Color.blue.opacity(0.08) : Color.red.opacity(0.1)))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(result.isVerified ? Color.blue.opacity(0.3) : Color.red.opacity(0.3), lineWidth: 1))
             }
-            .padding(16)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color.green.opacity(0.1)))
         }
     }
 
