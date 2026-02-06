@@ -148,23 +148,7 @@ public struct WitnessDemo {
                         )
                         let elapsed = Date().timeIntervalSince(startTime) * 1000
 
-                        // Fetch expected root for verification
-                        var expectedRootHex: String?
-                        var rootsMatch: Bool?
-                        do {
-                            let expectedRoot = try await sdkSynchronizer.getOrchardTreeRoot(BlockHeight(checkpointHeight))
-                            expectedRootHex = expectedRoot.map { String(format: "%02x", $0) }.joined()
-                            // Compare with witness root (bytes 8-39)
-                            if data.count >= 40 {
-                                let witnessRoot = data.subdata(in: 8..<40)
-                                rootsMatch = (witnessRoot == expectedRoot)
-                            }
-                        } catch {
-                            // Verification failed but witness was generated - still show result
-                            expectedRootHex = "fetch failed: \(error.localizedDescription)"
-                        }
-
-                        let result = parseWitnessResult(from: data, timingMs: elapsed, expectedRootHex: expectedRootHex, rootsMatch: rootsMatch)
+                        let result = parseWitnessResult(from: data, timingMs: elapsed)
                         await send(.witnessGenerated(result))
                     } catch {
                         await send(.witnessFailed(error.localizedDescription))
@@ -231,16 +215,14 @@ private func parseOrchardNotes(from data: Data) -> [OrchardNoteDisplay] {
 
 /// Parse the serialized witness result from FFI.
 /// Format: position (8) + root (32) + path_len (4) + auth_path (32*32)
-private func parseWitnessResult(from data: Data, timingMs: Double, expectedRootHex: String? = nil, rootsMatch: Bool? = nil) -> WitnessResultDisplay {
+private func parseWitnessResult(from data: Data, timingMs: Double) -> WitnessResultDisplay {
     guard data.count >= 44 else {
         return WitnessResultDisplay(
             position: 0,
             rootHex: "invalid",
             pathLength: 0,
             authPathPreview: "invalid",
-            timingMs: timingMs,
-            expectedRootHex: expectedRootHex,
-            rootsMatch: rootsMatch
+            timingMs: timingMs
         )
     }
 
@@ -267,9 +249,7 @@ private func parseWitnessResult(from data: Data, timingMs: Double, expectedRootH
         rootHex: rootHex,
         pathLength: pathLength,
         authPathPreview: authPathPreview,
-        timingMs: timingMs,
-        expectedRootHex: expectedRootHex,
-        rootsMatch: rootsMatch
+        timingMs: timingMs
     )
 }
 
@@ -293,7 +273,4 @@ public struct WitnessResultDisplay: Equatable {
     public let pathLength: UInt32
     public let authPathPreview: String
     public let timingMs: Double
-    // Verification
-    public let expectedRootHex: String?
-    public let rootsMatch: Bool?
 }
