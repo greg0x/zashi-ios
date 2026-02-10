@@ -64,6 +64,7 @@ public struct Voting {
     public enum Action {
         // Navigation
         case navigate(State.Screen)
+        case dismissFlow
         case goBack
         case popToProposalList
 
@@ -99,6 +100,10 @@ public struct Voting {
 
             case .navigate(let screen):
                 state.screenStack.append(screen)
+                return .none
+
+            case .dismissFlow:
+                // Handled by parent (Settings coordinator pops)
                 return .none
 
             case .goBack:

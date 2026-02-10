@@ -179,7 +179,11 @@ extension Settings {
             case .votingTapped:
                 state.path.append(.voting(Voting.State.initial))
                 return .none
-                
+
+            case .path(.element(id: _, action: .voting(.dismissFlow))):
+                let _ = state.path.popLast()
+                return .none
+
                 // MARK: - Self
                 
             case .currencyConversionTapped:

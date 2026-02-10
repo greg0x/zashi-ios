@@ -15,7 +15,7 @@ public struct VotingView: View {
                 .transition(.move(edge: .trailing))
                 .animation(.easeInOut(duration: 0.25), value: store.screenStack.count)
         }
-        .navigationBarHidden(true)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     @ViewBuilder

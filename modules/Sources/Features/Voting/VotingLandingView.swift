@@ -101,6 +101,14 @@ struct VotingLandingView: View {
                 .padding(.top, 16)
             }
             .navigationTitle("Governance Voting")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button { store.send(.dismissFlow) } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                }
+            }
             .onReceive(timer) { _ in
                 now = Date()
             }
