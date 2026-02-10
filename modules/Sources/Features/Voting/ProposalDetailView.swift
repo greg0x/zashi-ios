@@ -1,102 +1,66 @@
 import SwiftUI
 import ComposableArchitecture
 
-struct ProposalDetailView: View {
+struct VoteReviewView: View {
     let store: StoreOf<Voting>
-    let proposalId: String
 
     var body: some View {
         WithPerceptionTracking {
-            let proposal = store.votingRound.proposals.first { $0.id == proposalId }
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if let proposal {
-                        Text(proposal.title)
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Review Your Votes")
                             .font(.title2.bold())
                             .padding(.bottom, 8)
 
-                        if let zipNumber = proposal.zipNumber {
-                            Text(zipNumber)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .padding(.bottom, 16)
+                        Text("Tap any row to change your vote.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(.bottom, 20)
+
+                        // Vote list
+                        ForEach(Array(store.votingRound.proposals.enumerated()), id: \.element.id) { index, proposal in
+                            Button {
+                                store.send(.editVote(proposalIndex: index))
+                            } label: {
+                                voteRow(proposal: proposal)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.bottom, 4)
                         }
 
-                        Text(proposal.description)
-                            .font(.body)
-                            .foregroundStyle(.primary)
-                            .padding(.bottom, 16)
-
-                        if let forumURL = proposal.forumURL {
-                            Link(destination: forumURL) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "link")
-                                    Text("Discussion Forum")
-                                }
-                                .font(.subheadline)
-                            }
-                            .padding(.bottom, 24)
+                        // Total voting weight
+                        HStack {
+                            Text("Total voting weight")
+                                .font(.subheadline.bold())
+                            Spacer()
+                            Text("\(store.votingWeightZECString) ZEC")
+                                .font(.subheadline.bold().monospaced())
                         }
-
-                        // Existing vote
-                        if let existingVote = store.votes[proposalId] {
-                            HStack(spacing: 8) {
-                                Image(systemName: existingVote == .support
-                                      ? "hand.thumbsup.fill"
-                                      : "hand.thumbsdown.fill")
-                                Text("You voted: \(existingVote == .support ? "Support" : "Oppose")")
-                                    .font(.subheadline.bold())
-                            }
-                            .foregroundStyle(existingVote == .support ? .green : .red)
-                            .padding(16)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background((existingVote == .support ? Color.green : Color.red).opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                        } else {
-                            // Vote buttons
-                            VStack(spacing: 12) {
-                                Text("Cast Your Vote")
-                                    .font(.headline)
-                                    .padding(.bottom, 4)
-
-                                HStack(spacing: 12) {
-                                    Button {
-                                        store.send(.voteChoice(proposalId: proposalId, choice: .support))
-                                    } label: {
-                                        HStack {
-                                            Image(systemName: "hand.thumbsup.fill")
-                                            Text("Support")
-                                        }
-                                        .font(.headline)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 14)
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(.green)
-
-                                    Button {
-                                        store.send(.voteChoice(proposalId: proposalId, choice: .oppose))
-                                    } label: {
-                                        HStack {
-                                            Image(systemName: "hand.thumbsdown.fill")
-                                            Text("Oppose")
-                                        }
-                                        .font(.headline)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 14)
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(.red)
-                                }
-                            }
-                        }
+                        .padding(16)
+                        .background(Color.blue.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .padding(.top, 12)
                     }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
                 }
+
+                // Submit button
+                Button {
+                    store.send(.submitVotesTapped)
+                } label: {
+                    Text("Submit Votes")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
                 .padding(.horizontal, 24)
-                .padding(.top, 16)
+                .padding(.bottom, 32)
             }
-            .navigationTitle("Proposal")
+            .navigationTitle("Vote Review")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -105,6 +69,67 @@ struct ProposalDetailView: View {
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func voteRow(proposal: Proposal) -> some View {
+        let choice = store.votes[proposal.id]
+
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(proposal.title)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+            }
+
+            Spacer()
+
+            if let choice {
+                voteChip(choice: choice)
+            } else {
+                Text("No vote")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private func voteChip(choice: VoteChoice) -> some View {
+        switch choice {
+        case .support:
+            Text("Support")
+                .font(.caption.bold())
+                .foregroundStyle(.green)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.green.opacity(0.15))
+                .clipShape(Capsule())
+        case .oppose:
+            Text("Oppose")
+                .font(.caption.bold())
+                .foregroundStyle(.red)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.red.opacity(0.15))
+                .clipShape(Capsule())
+        case .skip:
+            Text("Skipped")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color(.systemGray5))
+                .clipShape(Capsule())
         }
     }
 }

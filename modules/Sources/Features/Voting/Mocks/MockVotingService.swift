@@ -1,11 +1,24 @@
 import Foundation
 
 public enum MockVotingService {
+    public static let votingWeight: UInt64 = 14_250_000_000 // 142.50 ZEC
+
+    public static let delegationNotes: [DelegationNote] = [
+        DelegationNote(amount: 5_000_000_000),   // 50.00 ZEC
+        DelegationNote(amount: 4_250_000_000),   // 42.50 ZEC
+        DelegationNote(amount: 5_000_000_000),   // 50.00 ZEC
+    ]
+
+    public static let hotkeyAddress = "zs1voting7qk4hs9xd3nfw8yj6m2r0ekrl...a8e2"
+
     public static let votingRound = VotingRound(
-        id: "nu7-2025",
-        title: "NU7 Governance Vote",
+        id: "nu7-sentiment-0xab3f7c91e2d4",
+        title: "NU7 Sentiment Poll",
+        description: "Community sentiment polling for proposed NU7 network upgrade features. Your shielded balance is used as voting weight.",
         snapshotHeight: 2_800_000,
-        deadline: Calendar.current.date(byAdding: .day, value: 10, to: Date())!,
+        snapshotDate: Calendar.current.date(byAdding: .day, value: -3, to: Date())!,
+        votingStart: Calendar.current.date(byAdding: .day, value: -1, to: Date())!,
+        votingEnd: Calendar.current.date(byAdding: .day, value: 10, to: Date())!,
         proposals: proposals
     )
 
@@ -19,83 +32,75 @@ public enum MockVotingService {
         ),
         Proposal(
             id: "nsm",
-            title: "Network Sustainability Mechanism",
+            title: "Network Sustainability Mechanism (NSM)",
             description: "Introduce a smoothed, market-based issuance mechanism to ensure long-term sustainability of network security incentives.",
             zipNumber: "ZIP-234",
             forumURL: URL(string: "https://forum.zcashcommunity.com/t/nsm")
         ),
         Proposal(
-            id: "crosschain-bridges",
-            title: "Zcash ↔ Ethereum Bridge",
-            description: "Enable trustless bridging of ZEC and ZSAs between Zcash and Ethereum, unlocking DeFi participation while maintaining privacy.",
-            forumURL: URL(string: "https://forum.zcashcommunity.com/t/bridge")
+            id: "burn-fees",
+            title: "Burning 60% of transaction fees",
+            description: "Burn 60% of all transaction fees to create deflationary pressure and align miner incentives with network health.",
+            forumURL: URL(string: "https://forum.zcashcommunity.com/t/burn-fees")
         ),
         Proposal(
-            id: "proof-of-stake",
-            title: "Hybrid Proof-of-Stake",
-            description: "Transition Zcash to a hybrid PoS consensus mechanism, improving energy efficiency and enabling staking-based governance.",
-            forumURL: URL(string: "https://forum.zcashcommunity.com/t/pos")
+            id: "memo-bundles",
+            title: "Memo Bundles",
+            description: "Extend the memo system to support structured, multi-part memo bundles for richer application-layer protocols.",
+            forumURL: URL(string: "https://forum.zcashcommunity.com/t/memo-bundles")
         ),
         Proposal(
-            id: "zashi-mobile",
-            title: "Zashi Mobile Enhancements",
-            description: "Fund continued development of the Zashi mobile wallet, including improved sync performance, better UX, and new features.",
-            forumURL: URL(string: "https://forum.zcashcommunity.com/t/zashi")
+            id: "explicit-fees",
+            title: "Explicit Fees",
+            description: "Require transactions to explicitly declare fees rather than inferring them, improving transparency and wallet UX.",
+            forumURL: URL(string: "https://forum.zcashcommunity.com/t/explicit-fees")
         ),
         Proposal(
-            id: "zcash-memo-standard",
-            title: "Structured Memo Fields",
-            description: "Standardize memo field formats across the ecosystem for interoperable messaging, payment requests, and metadata.",
-            zipNumber: "ZIP-302",
-            forumURL: URL(string: "https://forum.zcashcommunity.com/t/memo")
+            id: "disallow-v4",
+            title: "Disallowing v4 transactions",
+            description: "Remove support for legacy v4 transparent transactions to simplify the protocol and encourage shielded usage.",
+            forumURL: URL(string: "https://forum.zcashcommunity.com/t/disallow-v4")
         ),
         Proposal(
-            id: "shielded-multisig",
-            title: "Shielded Multi-Signature",
-            description: "Enable threshold-signature spending from shielded pools, allowing organizations to hold and transact ZEC with m-of-n authorization.",
-            forumURL: URL(string: "https://forum.zcashcommunity.com/t/multisig")
+            id: "tachyon",
+            title: "Project Tachyon",
+            description: "A research initiative to dramatically improve Zcash sync performance through novel cryptographic techniques.",
+            forumURL: URL(string: "https://forum.zcashcommunity.com/t/tachyon")
         ),
         Proposal(
-            id: "privacy-metrics",
-            title: "Privacy Metrics Dashboard",
-            description: "Fund research and tooling to measure and report on the privacy guarantees of the Zcash network in practice.",
-            forumURL: URL(string: "https://forum.zcashcommunity.com/t/metrics")
+            id: "stark-tze",
+            title: "STARK proof verification via TZEs",
+            description: "Enable STARK proof verification through Time-locked Zero-knowledge Extensions, expanding Zcash's programmability.",
+            forumURL: URL(string: "https://forum.zcashcommunity.com/t/stark-tze")
         ),
         Proposal(
-            id: "dev-tooling",
-            title: "Developer Tooling Grants",
-            description: "Allocate funds for SDKs, documentation, and developer experience improvements to grow the Zcash builder ecosystem.",
-            forumURL: URL(string: "https://forum.zcashcommunity.com/t/devtools")
+            id: "dynamic-fees",
+            title: "Dynamic fee mechanism",
+            description: "Implement a dynamic fee algorithm that adjusts fees based on network demand, improving congestion management.",
+            forumURL: URL(string: "https://forum.zcashcommunity.com/t/dynamic-fees")
         ),
         Proposal(
-            id: "regulatory-defense",
-            title: "Regulatory & Legal Defense Fund",
-            description: "Establish a legal defense fund to protect privacy technology and its users from regulatory overreach.",
-            forumURL: URL(string: "https://forum.zcashcommunity.com/t/legal")
+            id: "consensus-accounts",
+            title: "Consensus accounts",
+            description: "Introduce consensus-level account abstractions to support more complex on-chain logic and state management.",
+            forumURL: URL(string: "https://forum.zcashcommunity.com/t/consensus-accounts")
         ),
         Proposal(
-            id: "network-upgrade-cadence",
-            title: "Biannual Network Upgrade Cadence",
-            description: "Formalize a predictable 6-month network upgrade cycle to improve coordination and reduce risk in protocol development.",
-            zipNumber: "ZIP-400",
-            forumURL: URL(string: "https://forum.zcashcommunity.com/t/cadence")
+            id: "quantum-recovery",
+            title: "Orchard quantum recoverability",
+            description: "Add quantum-resistant key recovery mechanisms to the Orchard shielded pool, future-proofing funds against quantum attacks.",
+            forumURL: URL(string: "https://forum.zcashcommunity.com/t/quantum-recovery")
         ),
     ]
 
-    /// Binary decomposition of a ZEC amount into powers of 2
-    public static func binaryDecomposition(zatoshi: UInt64) -> [UInt64] {
-        var result: [UInt64] = []
-        var remaining = zatoshi
-        var bit: UInt64 = 1
+    public static var votingWeightZECString: String {
+        let zec = Double(votingWeight) / 100_000_000.0
+        return String(format: "%.2f", zec)
+    }
 
-        while remaining > 0 {
-            if remaining & 1 == 1 {
-                result.append(bit)
-            }
-            remaining >>= 1
-            bit <<= 1
-        }
-
-        return result.reversed()
+    public static var totalNotesZECString: String {
+        let total = delegationNotes.reduce(UInt64(0)) { $0 + $1.amount }
+        let zec = Double(total) / 100_000_000.0
+        return String(format: "%.2f", zec)
     }
 }
