@@ -10,11 +10,12 @@ public struct VotingView: View {
 
     public var body: some View {
         WithPerceptionTracking {
-            NavigationStack {
-                screenView(for: store.currentScreen)
-                    .animation(.default, value: store.currentScreen)
-            }
+            screenView(for: store.currentScreen)
+                .id(store.screenStack.count) // force view identity change on navigation
+                .transition(.move(edge: .trailing))
+                .animation(.easeInOut(duration: 0.25), value: store.screenStack.count)
         }
+        .navigationBarHidden(true)
     }
 
     @ViewBuilder
@@ -53,5 +54,7 @@ extension StoreOf<Voting> {
 }
 
 #Preview {
-    VotingView(store: .placeholder)
+    NavigationStack {
+        VotingView(store: .placeholder)
+    }
 }
