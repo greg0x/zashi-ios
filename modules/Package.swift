@@ -88,6 +88,7 @@ let package = Package(
         .library(name: "WalletBalances", targets: ["WalletBalances"]),
         .library(name: "WalletBirthday", targets: ["WalletBirthday"]),
         .library(name: "WalletConfigProvider", targets: ["WalletConfigProvider"]),
+        .library(name: "Voting", targets: ["Voting"]),
         .library(name: "WalletStorage", targets: ["WalletStorage"]),
         .library(name: "Welcome", targets: ["Welcome"]),
         .library(name: "WhatsNew", targets: ["WhatsNew"]),
@@ -826,6 +827,13 @@ let package = Package(
             path: "Sources/Features/ServerSetup"
         ),
         .target(
+            name: "Voting",
+            dependencies: [
+                .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+            ],
+            path: "Sources/Features/Voting"
+        ),
+        .target(
             name: "Settings",
             dependencies: [
                 "About",
@@ -850,6 +858,7 @@ let package = Package(
                 "SupportDataGenerator",
                 "TorSetup",
                 "UIComponents",
+                "Voting",
                 "WalletStorage",
                 "WhatsNew",
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
