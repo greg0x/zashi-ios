@@ -17,6 +17,7 @@ import ServerSetup
 import SendFeedback
 import WhatsNew
 import TorSetup
+import Voting
 
 public struct SettingsView: View {
     @Environment(\.colorScheme) var colorScheme
@@ -55,7 +56,14 @@ public struct SettingsView: View {
                             ) {
                                 store.send(.advancedSettingsTapped)
                             }
-                            
+
+                            ActionRow(
+                                icon: Asset.Assets.Icons.settings.image,
+                                title: "Governance Voting"
+                            ) {
+                                store.send(.votingTapped)
+                            }
+
                             ActionRow(
                                 icon: Asset.Assets.Icons.magicWand.image,
                                 title: L10n.Settings.whatsNew
@@ -136,6 +144,8 @@ public struct SettingsView: View {
                     SendFeedbackView(store: store)
                 case let .torSetup(store):
                     TorSetupView(store: store)
+                case let .voting(store):
+                    VotingView(store: store)
                 case let .whatsNew(store):
                     WhatsNewView(store: store)
                 }

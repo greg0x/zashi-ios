@@ -21,6 +21,7 @@ import ServerSetup
 import SendFeedback
 import WhatsNew
 import TorSetup
+import Voting
 
 extension Settings {
     public func coordinatorReduce() -> Reduce<Settings.State, Settings.Action> {
@@ -173,6 +174,10 @@ extension Settings {
 
             case .sendUsFeedbackTapped:
                 state.path.append(.sendUsFeedback(SendFeedback.State.initial))
+                return .none
+
+            case .votingTapped:
+                state.path.append(.voting(Voting.State.initial))
                 return .none
                 
                 // MARK: - Self

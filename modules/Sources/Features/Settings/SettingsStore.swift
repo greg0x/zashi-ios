@@ -23,6 +23,7 @@ import ServerSetup
 import SendFeedback
 import WhatsNew
 import TorSetup
+import Voting
 
 @Reducer
 public struct Settings {
@@ -43,6 +44,7 @@ public struct Settings {
         case scan(Scan)
         case sendUsFeedback(SendFeedback)
         case torSetup(TorSetup)
+        case voting(Voting)
         case whatsNew(WhatsNew)
     }
     
@@ -93,6 +95,7 @@ public struct Settings {
         case path(StackActionOf<Path>)
         case payWithFlexaTapped
         case sendUsFeedbackTapped
+        case votingTapped
         case whatsNewTapped
     }
 
@@ -143,6 +146,9 @@ public struct Settings {
                 return .none
 
             case .sendUsFeedbackTapped:
+                return .none
+
+            case .votingTapped:
                 return .none
 
             case .whatsNewTapped:
